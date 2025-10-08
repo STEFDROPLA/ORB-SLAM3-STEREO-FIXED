@@ -167,6 +167,18 @@ public:
     // See format details at: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
     void SaveTrajectoryKITTI(const string &filename);
 
+
+    // ---- Keyframe trajectory access (ROS-agnostic) ----
+    struct KFTrajectorySample {
+        double timestamp;                   // seconds
+        Eigen::Vector3f t;                  // translation (world -> camera pose inverse)
+        Eigen::Quaternionf q;               // orientation (world -> camera pose inverse)
+    };
+    
+    // Returns all *valid* keyframes as Twc (camera in world), sorted by timestamp.
+    // If start_at_origin=true, rebases so the first valid KF is identity.
+    std::vector<KFTrajectorySample> GetKeyFrameTrajectory(bool start_at_origin=false) const;
+
     // TODO: Save/Load functions
     // SaveMap(const string &filename);
     // LoadMap(const string &filename);
