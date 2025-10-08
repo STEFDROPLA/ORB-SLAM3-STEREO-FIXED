@@ -33,7 +33,9 @@
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
 #include <algorithm>   // for sort
-
+#include "Atlas.h"       // for Atlas and GetAllKeyFrames()
+#include "KeyFrame.h"    // for ORB_SLAM3::KeyFrame
+#include <Eigen/Geometry> // for Eigen::Quaternionf
 
 namespace ORB_SLAM3
 {
