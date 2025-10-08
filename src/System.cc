@@ -32,6 +32,8 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
+#include <algorithm>   // for sort
+
 
 namespace ORB_SLAM3
 {
@@ -774,6 +776,57 @@ void System::SaveTrajectoryEuRoC(const string &filename)
     //cout << "end saving trajectory" << endl;
     f.close();
     cout << endl << "End of saving trajectory to " << filename << " ..." << endl;
+}
+
+
+
+std::vector<System::KFTrajectorySample>
+System::GetKeyFrameTrajectory(bool start_at_origin) const
+{
+    std::vector<System::KFTrajectorySample> out;
+
+    // Access the atlas (this file has access to mpAtlas)
+    if(!mpAtlas) return out;
+
+    // Snapshot keyframes
+    std::vector<ORB_SLAM3::KeyFrame*> kfs = mpAtlas->GetAllKeyFrames();
+    if(kfs.empty()) return out;
+
+    // Sort by timestamp (robust to loop closures)
+    std::sort(kfs.begin(), kfs.end(),
+              [](ORB_SLAM3::KeyFrame* a, ORB_SLAM3::KeyFrame* b){
+                  return a->mTimeStamp < b->mTimeStamp;
+              });
+
+    // Optional origin rebase
+    bool have_origin = false;
+    Sophus::SE3f Twc0;
+
+    out.reserve(kfs.size());
+    for(auto* kf : kfs)
+    {
+        if(!kf || kf->isBad()) continue;
+
+        Sophus::SE3f Twc = kf->GetPoseInverse(); // camera pose in world
+
+        if(start_at_origin){
+            if(!have_origin){
+                Twc0 = Twc;
+                have_origin = true;
+            }
+            Twc = Twc0.inverse() * Twc;
+        }
+
+        System::KFTrajectorySample s;
+        s.timestamp = kf->mTimeStamp;
+        s.t = Twc.translation();
+        s.q = Twc.unit_quaternion();
+        s.q.normalize();
+
+        out.emplace_back(std::move(s));
+    }
+
+    return out;
 }
 
 void System::SaveTrajectoryEuRoC(const string &filename, Map* pMap)
