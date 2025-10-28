@@ -39,7 +39,8 @@
 #include "Viewer.h"
 #include "ImuTypes.h"
 #include "Settings.h"
-
+#include <vector>
+#include <Eigen/Dense>
 
 namespace ORB_SLAM3
 {
@@ -167,6 +168,11 @@ public:
     // See format details at: http://www.cvlibs.net/datasets/kitti/eval_odometry.php
     void SaveTrajectoryKITTI(const string &filename);
 
+
+    //custom function to return map points
+    std::vector<Eigen::Vector3f> GetMapPointPositions(
+        bool only_active_map = true,
+        bool include_ref_points = true) const;
 
     // ---- Keyframe trajectory access (ROS-agnostic) ----
     struct KFTrajectorySample {
