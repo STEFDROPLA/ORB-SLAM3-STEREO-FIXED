@@ -36,6 +36,10 @@
 #include "Atlas.h"       // for Atlas and GetAllKeyFrames()
 #include "KeyFrame.h"    // for ORB_SLAM3::KeyFrame
 #include <Eigen/Geometry> // for Eigen::Quaternionf
+#include "Map.h"
+#include "MapPoint.h"
+
+#include <unordered_set>
 
 namespace ORB_SLAM3
 {
@@ -201,7 +205,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run,mpLocalMapper);
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
-        mpLocalMapper->mThFarPoints = settings_->thFarPoints();
+        mpLocalMapper->mThFarPoints = settin#include <unordered_set>gs_->thFarPoints();
     else
         mpLocalMapper->mThFarPoints = fsSettings["thFarPoints"];
     if(mpLocalMapper->mThFarPoints!=0)
@@ -778,6 +782,69 @@ void System::SaveTrajectoryEuRoC(const string &filename)
     //cout << "end saving trajectory" << endl;
     f.close();
     cout << endl << "End of saving trajectory to " << filename << " ..." << endl;
+}
+
+//custom function to extract Map point
+std::vector<Eigen::Vector3f> System::GetMapPointPositions(
+    bool only_active_map,
+    bool include_ref_points) const
+{
+    std::vector<Eigen::Vector3f> out;
+    if (!mpAtlas) return out;
+
+    // Gather maps
+    std::vector<Map*> maps;
+    if (only_active_map) {
+        Map* active = mpAtlas->GetCurrentMap();
+        if (!active) return out;
+        maps.push_back(active);
+    } else {
+        maps = mpAtlas->GetAllMaps();
+        if (maps.empty()) return out;
+    }
+
+    // De-duplicate MapPoints across (sub)maps
+    std::unordered_set<MapPoint*> unique_mps;
+    unique_mps.reserve(4096);
+
+    for (Map* m : maps) {
+        if (!m) continue;
+
+        // Normal MapPoints
+        const std::vector<MapPoint*>& vMPs = m->GetAllMapPoints();
+        for (MapPoint* p : vMPs) {
+            if (!p || p->isBad()) continue;
+            unique_mps.insert(p);
+        }
+
+        // Reference MapPoints (drawn red in MapDrawer)
+        if (include_ref_points) {
+            const std::vector<MapPoint*>& vRef = m->GetReferenceMapPoints();
+            for (MapPoint* p : vRef) {
+                if (!p || p->isBad()) continue;
+                unique_mps.insert(p);
+            }
+        }
+    }
+
+    out.reserve(unique_mps.size());
+
+    // Convert to Eigen::Vector3f
+    for (MapPoint* p : unique_mps) {
+        // Your fork likely returns Eigen::Matrix<float,3,1>.
+        // If it returns cv::Mat (3x1), use the cv branch below.
+        #if 1
+        const Eigen::Matrix<float,3,1> Xw = p->GetWorldPos();
+        out.emplace_back(Xw(0), Xw(1), Xw(2));
+        #else
+        const cv::Mat Xw = p->GetWorldPos(); // CV_32F, 3x1
+        if (Xw.rows == 3 && Xw.cols == 1 && Xw.type() == CV_32F) {
+            out.emplace_back(Xw.at<float>(0), Xw.at<float>(1), Xw.at<float>(2));
+        }
+        #endif
+    }
+
+    return out;
 }
 
 
