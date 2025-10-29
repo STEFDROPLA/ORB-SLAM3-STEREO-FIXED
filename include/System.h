@@ -282,6 +282,9 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+
+    std::unique_ptr<Settings> settings_; 
 };
 
 }// namespace ORB_SLAM
