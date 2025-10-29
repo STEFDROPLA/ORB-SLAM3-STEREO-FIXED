@@ -234,6 +234,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
+    settings_ = std::make_unique<Settings>(settings_file, sensor);
+  
     //usleep(10*1000*1000);
 
     //Initialize the Viewer thread and launch
