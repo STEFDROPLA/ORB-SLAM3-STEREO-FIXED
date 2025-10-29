@@ -36,8 +36,11 @@
 #include "Atlas.h"       // for Atlas and GetAllKeyFrames()
 #include "KeyFrame.h"    // for ORB_SLAM3::KeyFrame
 #include <Eigen/Geometry> // for Eigen::Quaternionf
+#include <Eigen/Core>  
 #include "Map.h"
 #include "MapPoint.h"
+#include "Settings.h"
+
 
 #include <unordered_set>
 
@@ -784,15 +787,16 @@ void System::SaveTrajectoryEuRoC(const string &filename)
     cout << endl << "End of saving trajectory to " << filename << " ..." << endl;
 }
 
-//custom function to extract Map point
-std::vector<Eigen::Vector3f> System::GetMapPointPositions(
+
+
+//custom function
+std::vector<Eigen::Vector3f> ORB_SLAM3::System::GetMapPointPositions(
     bool only_active_map,
     bool include_ref_points) const
 {
     std::vector<Eigen::Vector3f> out;
     if (!mpAtlas) return out;
 
-    // Gather maps
     std::vector<Map*> maps;
     if (only_active_map) {
         Map* active = mpAtlas->GetCurrentMap();
@@ -803,21 +807,18 @@ std::vector<Eigen::Vector3f> System::GetMapPointPositions(
         if (maps.empty()) return out;
     }
 
-    // De-duplicate MapPoints across (sub)maps
     std::unordered_set<MapPoint*> unique_mps;
     unique_mps.reserve(4096);
 
     for (Map* m : maps) {
         if (!m) continue;
 
-        // Normal MapPoints
         const std::vector<MapPoint*>& vMPs = m->GetAllMapPoints();
         for (MapPoint* p : vMPs) {
             if (!p || p->isBad()) continue;
             unique_mps.insert(p);
         }
 
-        // Reference MapPoints (drawn red in MapDrawer)
         if (include_ref_points) {
             const std::vector<MapPoint*>& vRef = m->GetReferenceMapPoints();
             for (MapPoint* p : vRef) {
@@ -829,19 +830,10 @@ std::vector<Eigen::Vector3f> System::GetMapPointPositions(
 
     out.reserve(unique_mps.size());
 
-    // Convert to Eigen::Vector3f
     for (MapPoint* p : unique_mps) {
-        // Your fork likely returns Eigen::Matrix<float,3,1>.
-        // If it returns cv::Mat (3x1), use the cv branch below.
-        #if 1
+        // If your fork returns cv::Mat (3x1), switch to that branch.
         const Eigen::Matrix<float,3,1> Xw = p->GetWorldPos();
         out.emplace_back(Xw(0), Xw(1), Xw(2));
-        #else
-        const cv::Mat Xw = p->GetWorldPos(); // CV_32F, 3x1
-        if (Xw.rows == 3 && Xw.cols == 1 && Xw.type() == CV_32F) {
-            out.emplace_back(Xw.at<float>(0), Xw.at<float>(1), Xw.at<float>(2));
-        }
-        #endif
     }
 
     return out;
