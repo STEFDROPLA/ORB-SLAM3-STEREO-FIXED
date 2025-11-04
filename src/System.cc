@@ -93,6 +93,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mStrSaveAtlasToFile = settings_->atlasSaveFile();
 
         cout << (*settings_) << endl;
+      
     }
     else{
         settings_ = nullptr;
@@ -234,7 +235,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
 
-    settings_ = std::make_unique<Settings>(settings_file, sensor);
+    
   
     //usleep(10*1000*1000);
 
