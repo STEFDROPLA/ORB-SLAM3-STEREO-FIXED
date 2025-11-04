@@ -170,11 +170,6 @@ public:
     void SaveTrajectoryKITTI(const string &filename);
 
 
-    //custom function to return map point
-    // Returns world-frame positions of MapPoints (meters).
-    std::vector<Eigen::Vector3f> GetMapPointPositions(
-        bool only_active_map = true,
-        bool include_ref_points = true) const;
 
     // ---- Keyframe trajectory access (ROS-agnostic) ----
     struct KFTrajectorySample {
