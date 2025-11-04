@@ -208,7 +208,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run,mpLocalMapper);
     mpLocalMapper->mInitFr = initFr;
     if(settings_)
-        mpLocalMapper->mThFarPoints = mpSettings->thFarPoints();
+        mpLocalMapper->mThFarPoints = settings_->thFarPoints();
     else
         mpLocalMapper->mThFarPoints = fsSettings["thFarPoints"];
     if(mpLocalMapper->mThFarPoints!=0)
