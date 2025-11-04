@@ -3120,7 +3120,10 @@ void Optimizer::InertialOptimization(Map *pMap, Eigen::Matrix3d &Rwg, double &sc
     optimizer.addVertex(VGDir);
     VertexScale* VS = new VertexScale(scale);
     VS->setId(maxKFid*2+5);
-    VS->setFixed(!bMono); // Fixed for stereo case
+    //VS->setFixed(!bMono);Fixed for stereo case
+    // allow scale to move for stereo too
+    VS->setFixed(false);
+
     optimizer.addVertex(VS);
 
     // Graph edges
