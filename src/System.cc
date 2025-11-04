@@ -38,7 +38,7 @@
 #include <Eigen/Geometry> // for Eigen::Quaternionf
 #include <Eigen/Core>  
 #include "Map.h"
-#include "MapPoint.h"
+
 #include "Settings.h"
 
 
@@ -790,56 +790,6 @@ void System::SaveTrajectoryEuRoC(const string &filename)
 }
 
 
-
-//custom function
-std::vector<Eigen::Vector3f> ORB_SLAM3::System::GetMapPointPositions(
-    bool only_active_map,
-    bool include_ref_points) const
-{
-    std::vector<Eigen::Vector3f> out;
-    if (!mpAtlas) return out;
-
-    std::vector<Map*> maps;
-    if (only_active_map) {
-        Map* active = mpAtlas->GetCurrentMap();
-        if (!active) return out;
-        maps.push_back(active);
-    } else {
-        maps = mpAtlas->GetAllMaps();
-        if (maps.empty()) return out;
-    }
-
-    std::unordered_set<MapPoint*> unique_mps;
-    unique_mps.reserve(4096);
-
-    for (Map* m : maps) {
-        if (!m) continue;
-
-        const std::vector<MapPoint*>& vMPs = m->GetAllMapPoints();
-        for (MapPoint* p : vMPs) {
-            if (!p || p->isBad()) continue;
-            unique_mps.insert(p);
-        }
-
-        if (include_ref_points) {
-            const std::vector<MapPoint*>& vRef = m->GetReferenceMapPoints();
-            for (MapPoint* p : vRef) {
-                if (!p || p->isBad()) continue;
-                unique_mps.insert(p);
-            }
-        }
-    }
-
-    out.reserve(unique_mps.size());
-
-    for (MapPoint* p : unique_mps) {
-        // If your fork returns cv::Mat (3x1), switch to that branch.
-        const Eigen::Matrix<float,3,1> Xw = p->GetWorldPos();
-        out.emplace_back(Xw(0), Xw(1), Xw(2));
-    }
-
-    return out;
-}
 
 
 
