@@ -1222,35 +1222,60 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     const int N = vpKF.size();
     IMU::Bias b(0,0,0,0,0,0);
 
-    // Compute and KF velocities mRwg estimation
+    // Compute and KF velocities mRwg estimation---OLD
+    // Compute and KF velocities, but FIX gravity (mRwg) to match IMU −X
     if (!mpCurrentKeyFrame->GetMap()->isImuInitialized())
     {
-        Eigen::Matrix3f Rwg;
-        Eigen::Vector3f dirG;
-        dirG.setZero();
-        for(vector<KeyFrame*>::iterator itKF = vpKF.begin(); itKF!=vpKF.end(); itKF++)
+        // Still set initial KF velocities as in the original loop (optional, keeps same behavior)
+        for (auto itKF = vpKF.begin(); itKF != vpKF.end(); ++itKF)
         {
-            if (!(*itKF)->mpImuPreintegrated)
-                continue;
-            if (!(*itKF)->mPrevKF)
-                continue;
-
-            dirG -= (*itKF)->mPrevKF->GetImuRotation() * (*itKF)->mpImuPreintegrated->GetUpdatedDeltaVelocity();
-            Eigen::Vector3f _vel = ((*itKF)->GetImuPosition() - (*itKF)->mPrevKF->GetImuPosition())/(*itKF)->mpImuPreintegrated->dT;
+            if (!(*itKF)->mpImuPreintegrated || !(*itKF)->mPrevKF) continue;
+            Eigen::Vector3f _vel =
+                ((*itKF)->GetImuPosition() - (*itKF)->mPrevKF->GetImuPosition()) /
+                (*itKF)->mpImuPreintegrated->dT;
             (*itKF)->SetVelocity(_vel);
             (*itKF)->mPrevKF->SetVelocity(_vel);
         }
-
-        dirG = dirG/dirG.norm();
-        Eigen::Vector3f gI(0.0f, 0.0f, -1.0f);
-        Eigen::Vector3f v = gI.cross(dirG);
-        const float nv = v.norm();
-        const float cosg = gI.dot(dirG);
-        const float ang = acos(cosg);
-        Eigen::Vector3f vzg = v*ang/nv;
-        Rwg = Sophus::SO3f::exp(vzg).matrix();
+    
+        // World gravity unit (ORB-SLAM3 convention): g^w = (0, 0, −1)
+        const Eigen::Vector3f gW(0.f, 0.f, -1.f);
+    
+        // Known IMU/body gravity direction: g^b = (−1, 0, 0)  (IMU +X up ⇒ gravity along −X)
+        const Eigen::Vector3f gB(-1.f, 0.f, 0.f);
+    
+        // Body->World rotation at first KF (w.r.t. SLAM world)
+        // (world = first camera frame; IMU pose from Tcb)
+        const Eigen::Matrix3f Rwb0 = vpKF.front()->GetImuRotation();
+    
+        // Desired gravity direction in world: dirG = R_wb * g^b
+        Eigen::Vector3f dirG = (Rwb0 * gB);
+        const float n = dirG.norm();
+        if (n > 1e-8f) dirG /= n; else dirG = gW; // fallback
+    
+        // Build Rwg that maps world gravity gW onto dirG (minimal rotation)
+        Eigen::Vector3f v = gW.cross(dirG);
+        const float s = v.norm();
+        const float c = gW.dot(dirG);
+    
+        Eigen::Matrix3f Rwg = Eigen::Matrix3f::Identity();
+        if (s > 1e-8f)
+        {
+            Eigen::Matrix3f K = Sophus::SO3f::hat(v / s);
+            // Rodrigues: R = I + K*sinθ + K^2*(1−cosθ), with sinθ = s, cosθ = c
+            Rwg = Eigen::Matrix3f::Identity() + K * s + K * K * ((1.f - c) / (s * s));
+        }
+        else if (c < 0.f)
+        {
+            // 180°: pick any axis ⟂ gW
+            Eigen::Vector3f axis = (std::abs(gW.x()) < 0.9f ? Eigen::Vector3f::UnitX()
+                                                            : Eigen::Vector3f::UnitY()).cross(gW).normalized();
+            Eigen::Matrix3f K = Sophus::SO3f::hat(axis);
+            Rwg = Eigen::Matrix3f::Identity() + 2.f * K * K; // 180°: R = I + 2K^2
+        }
+        // else Rwg = I
+    
         mRwg = Rwg.cast<double>();
-        mTinit = mpCurrentKeyFrame->mTimeStamp-mFirstTs;
+        mTinit = mpCurrentKeyFrame->mTimeStamp - mFirstTs;
     }
     else
     {
@@ -1264,7 +1289,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     mInitTime = mpTracker->mLastFrame.mTimeStamp-vpKF.front()->mTimeStamp;
 
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
-    Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, false, false, priorG, priorA);
+    Optimizer::InertialOptimization(mpAtlas->GetCurrentMap(), mRwg, mScale, mbg, mba, mbMonocular, infoInertial, true, false, priorG, priorA);
 
     std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
 
