@@ -236,6 +236,7 @@ void LocalMapping::Run()
                                 (mTinit>65.0f && mTinit<65.5f)||
                                 (mTinit>75.0f && mTinit<75.5f))){
                             if (mbMonocular)
+                                cout << "calling scale refinement" << endl;
                                 ScaleRefinement();
                         }
                     }
@@ -1304,6 +1305,7 @@ void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
     {
         unique_lock<mutex> lock(mpAtlas->GetCurrentMap()->mMutexMapUpdate);
         if ((fabs(mScale - 1.f) > 0.00001) || !mbMonocular) {
+            cout << "IMU inizialization" << endl;
             Sophus::SE3f Twg(mRwg.cast<float>().transpose(), Eigen::Vector3f::Zero());
             mpAtlas->GetCurrentMap()->ApplyScaledRotation(Twg, mScale, true);
             mpTracker->UpdateFrameIMU(mScale, vpKF[0]->GetImuBias(), mpCurrentKeyFrame);
@@ -1499,6 +1501,7 @@ void LocalMapping::ScaleRefinement()
     std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
     if ((fabs(mScale-1.f)>0.002)||!mbMonocular)
     {
+        cout << "Scale Refinement" << endl;
         Sophus::SE3f Tgw(mRwg.cast<float>().transpose(),Eigen::Vector3f::Zero());
         mpAtlas->GetCurrentMap()->ApplyScaledRotation(Tgw,mScale,true);
         mpTracker->UpdateFrameIMU(mScale,mpCurrentKeyFrame->GetImuBias(),mpCurrentKeyFrame);
