@@ -38,11 +38,12 @@
 #include <Eigen/Geometry> // for Eigen::Quaternionf
 #include <Eigen/Core>  
 #include "Map.h"
-
 #include "Settings.h"
-
-
 #include <unordered_set>
+
+
+#include <chrono>
+
 
 namespace ORB_SLAM3
 {
@@ -1611,6 +1612,53 @@ string System::CalculateCheckSum(string filename, int type)
 
     return checksum;
 }
+
+
+bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
+{
+  using namespace std::chrono_literals;
+  // Pause threads that can mutate the map while we rescale
+  if (mpLocalMapper)  mpLocalMapper->RequestStop();
+  if (mpLoopCloser)   mpLoopCloser->RequestStop();
+
+  // Wait until they are fully stopped
+  while ((mpLocalMapper && !mpLocalMapper->isStopped()) ||
+         (mpLoopCloser  && !mpLoopCloser->isStopped()))
+  {
+    std::this_thread::sleep_for(5ms);
+  }
+
+  // Sanity
+  Map* pMap = mpAtlas ? mpAtlas->GetCurrentMap() : nullptr;
+  if (!pMap || !mpLocalMapper) {
+    if (mpLocalMapper)  mpLocalMapper->Release();
+    if (mpLoopCloser)   mpLoopCloser->Release();
+    return false;
+  }
+
+  // --- Do the refinement (gravity+scale only) ---
+  // This calls your existing lightweight routine:
+  // LocalMapping::ScaleRefinement() -> Optimizer::InertialOptimization(map, Rwg, scale)
+  // then ApplyScaledRotation(Tgw, scale, true) + UpdateFrameIMU(...)
+  mpLocalMapper->ScaleRefinement();
+
+  // Optionally polish with a short Full Inertial BA
+  if (run_full_ba) {
+    Optimizer::FullInertialBA(pMap, /*its=*/40, /*bFixLocal=*/false);
+  }
+
+  // If the caller wants the resulting scale, read it from LocalMapping.
+  // (Expose a tiny getter, see below.)
+  if (s_out) {
+    *s_out = mpLocalMapper->GetLastScaleRefined();
+  }
+
+  // Resume normal operation
+  mpLocalMapper->Release();
+  mpLoopCloser->Release();
+  return true;
+}
+
 
 } //namespace ORB_SLAM
 
