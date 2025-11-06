@@ -1517,6 +1517,14 @@ void LocalMapping::ScaleRefinement()
 }
 
 
+void LocalMapping::RunScaleRefinement()
+{
+
+    ScaleRefinement();  // call the protected core
+}
+
+
+
 
 bool LocalMapping::IsInitializing()
 {
