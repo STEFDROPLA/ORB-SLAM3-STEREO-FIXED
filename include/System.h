@@ -201,6 +201,9 @@ public:
 
     float GetImageScale();
 
+    //added method
+    bool ScaleRefinementNow(bool run_full_ba = false, double* s_out = nullptr);
+
 #ifdef REGISTER_TIMES
     void InsertRectTime(double& time);
     void InsertResizeTime(double& time);
