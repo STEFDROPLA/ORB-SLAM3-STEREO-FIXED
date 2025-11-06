@@ -111,6 +111,9 @@ public:
     bool mbFarPoints;
     float mThFarPoints;
 
+    //wrapping method
+    void RunScaleRefinement();
+
 #ifdef REGISTER_TIMES
     vector<double> vdKFInsert_ms;
     vector<double> vdMPCulling_ms;
