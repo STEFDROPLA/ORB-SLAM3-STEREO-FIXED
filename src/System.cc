@@ -1618,10 +1618,11 @@ bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
 {
   using namespace std::chrono_literals;
   // Pause threads that can mutate the map while we rescale
-  if (mpLocalMapper)  mpLocalMapper->RequestStop();
+  //if (mpLocalMapper)  mpLocalMapper->RequestStop();
   //if (mpLoopCloser)   mpLoopCloser->RequestFinish();
 
   // Wait until they are fully stopped
+  /*
   while ((mpLocalMapper && !mpLocalMapper->isStopped()) ||
          (mpLoopCloser  && !mpLoopCloser->isFinished()))
   {
@@ -1635,7 +1636,7 @@ bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
     //if (mpLoopCloser)   mpLoopCloser->Release();
     return false;
   }
-
+  */
   // --- Do the refinement (gravity+scale only) ---
   // This calls your existing lightweight routine:
   // LocalMapping::ScaleRefinement() -> Optimizer::InertialOptimization(map, Rwg, scale)
@@ -1649,7 +1650,7 @@ bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
   //}
 
   // Resume normal operation
-  mpLocalMapper->Release();
+  //mpLocalMapper->Release();
   //mpLoopCloser->Release();
   return true;
 }
