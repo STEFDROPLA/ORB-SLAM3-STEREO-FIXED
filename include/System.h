@@ -81,6 +81,10 @@ class Tracking;
 class LocalMapping;
 class LoopClosing;
 class Settings;
+class ScaleSupervisor;
+
+struct ToFScan;
+
 
 class System
 {
@@ -210,6 +214,10 @@ public:
     void InsertTrackTime(double& time);
 #endif
 
+    void UpdateToFScan(const ToFScan& s);
+    friend class Tracking;
+    friend class LocalMapping;
+
 private:
 
     void SaveAtlas(int type);
@@ -280,6 +288,8 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+    ScaleSupervisor* mpScaleSup = nullptr;
 
 
     

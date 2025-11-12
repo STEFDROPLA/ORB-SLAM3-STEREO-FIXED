@@ -3334,6 +3334,10 @@ void Tracking::CreateNewKeyFrame()
 
     mpLocalMapper->InsertKeyFrame(pKF);
 
+    // ToF: compute λ for this KF (no-op in Phase 1, safe to call)
+    if (mpSystem->mpScaleSup) {
+        (void) mpSystem->mpScaleSup->ComputeLambdaForKeyFrame(pKF);
+    }
     mpLocalMapper->SetNotStop(false);
 
     mnLastKeyFrameId = mCurrentFrame.mnId;

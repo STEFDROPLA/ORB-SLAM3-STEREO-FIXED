@@ -41,6 +41,7 @@
 #include "Settings.h"
 #include <unordered_set>
 
+#include "ScaleSupervisor.h"
 
 #include <chrono>
 
@@ -253,6 +254,9 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
+
+    ScaleSupervisor::Params P; // keep defaults for now; we’ll load YAML later
+    mpScaleSup = new ScaleSupervisor(mpMap, P);
 
 }
 
@@ -1655,6 +1659,9 @@ bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
   return true;
 }
 
+void System::UpdateToFScan(const ToFScan& s) {
+  if (mpScaleSup) mpScaleSup->UpdateToFScan(s);
+}
 
 } //namespace ORB_SLAM
 
