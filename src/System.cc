@@ -255,9 +255,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
-    ScaleSupervisor::Params P; // keep defaults for now; we’ll load YAML later
-    mpScaleSup = new ScaleSupervisor(mpMap, P);
-
+    ScaleSupervisor::Params P;
+    mpScaleSup = new ScaleSupervisor(P);
 }
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
