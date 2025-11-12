@@ -29,6 +29,8 @@
 #include "MLPnPsolver.h"
 #include "GeometricTools.h"
 
+#include "ScaleSupervisor.h"
+
 #include <iostream>
 
 #include <mutex>
