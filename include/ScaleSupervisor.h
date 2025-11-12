@@ -41,18 +41,23 @@ public:
   bool MaybeApplyLocalScale(KeyFrame* /*kf*/) { return false; }
 
 private:
-  // ---- helpers for Phase 2 ----
-  Eigen::Vector3d RayDirCamFrame(int ix, int iy) const;
+  
+  // --- helpers (float types to match ORB-SLAM3) ---
+  Eigen::Vector3f RayDirCamFrame(int ix, int iy) const;
 
-  bool GatherNearby3D_FromMap(KeyFrame* pKF, const Eigen::Vector2d& px, int rad,
-                              std::vector<Eigen::Vector3d>& pts_cam) const;
+  bool GatherNearby3D_FromMap(KeyFrame* pKF, const Eigen::Vector2f& px, int rad,
+                              std::vector<Eigen::Vector3f>& pts_cam) const;
 
-  bool RobustPlaneRANSAC(const std::vector<Eigen::Vector3d>& pts,
-                         double thresh, int min_inliers,
-                         Eigen::Vector3d& P0, Eigen::Vector3d& n, int& ninl) const;
+  bool RobustPlaneRANSAC(const std::vector<Eigen::Vector3f>& pts, float thresh, int min_inliers,
+                         Eigen::Vector3f& P0, Eigen::Vector3f& n, int& ninl) const;
 
-  bool FitLocalPlaneFromMap(KeyFrame* pKF, const Eigen::Vector2d& px,
-                            Eigen::Vector3d& P0, Eigen::Vector3d& n, int& inliers) const;
+  bool FitLocalPlaneFromMap(KeyFrame* pKF, const Eigen::Vector2f& px,
+                            Eigen::Vector3f& P0, Eigen::Vector3f& n, int& inliers) const;
+
+  bool IntersectRayPlane(const Eigen::Vector3f& O, const Eigen::Vector3f& d_unit,
+                         const Eigen::Vector3f& P0, const Eigen::Vector3f& n,
+                         float& rhat) const;
+
 
 private:
   Params P_;

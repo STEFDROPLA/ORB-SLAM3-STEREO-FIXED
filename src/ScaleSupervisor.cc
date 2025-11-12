@@ -2,206 +2,237 @@
 
 #include "KeyFrame.h"
 #include "MapPoint.h"
-#include "Converter.h"
 
 #include <Eigen/Eigenvalues>
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <random>
 #include <vector>
 
-using Eigen::Matrix3d;
-using Eigen::Vector2d;
-using Eigen::Vector3d;
-
 namespace ORB_SLAM3 {
 
-static inline double deg2rad(double d){ return d*M_PI/180.0; }
+// ---------- small helpers ----------
+static inline float fpi()        { return 3.14159265358979323846f; }
+static inline float fdeg2rad(float d){ return d * (fpi() / 180.0f); }
 
+// ---------- ctor / ToF input ----------
 ScaleSupervisor::ScaleSupervisor(const Params& P)
-: P_(P) {}
-
-void ScaleSupervisor::UpdateToFScan(const ToFScan& s) {
-  std::lock_guard<std::mutex> lk(mtx_scan_);
-  last_scan_ = s;
-  has_scan_ = true;
+: P_(P)
+{
 }
 
-// --------- helpers ---------
+void ScaleSupervisor::UpdateToFScan(const ToFScan& s)
+{
+  std::lock_guard<std::mutex> lk(mtx_scan_);
+  last_scan_ = s;
+  has_scan_  = true;
+}
 
-Eigen::Vector3d ScaleSupervisor::RayDirCamFrame(int ix, int iy) const {
-  // Single-beam: ToF boresight (0,0,1) mapped into camera frame
+// ---------- geometry helpers (Phase 2) ----------
+
+/**
+ * Direction of ToF ray expressed in the CAMERA frame (unit length).
+ * Single-beam: use ToF boresight (0,0,1) rotated by R_cam_from_tof.
+ * Multi-pixel: uses Nx,Ny and FoV to compute per-pixel ray (still supported).
+ */
+Eigen::Vector3f ScaleSupervisor::RayDirCamFrame(int ix, int iy) const
+{
+  // Single-beam: straight ahead in ToF frame rotated to cam frame
   if (P_.Nx == 1 && P_.Ny == 1) {
-    Vector3d u_to(0,0,1);
-    Vector3d u_cam = P_.R_cam_from_tof * u_to;
+    const Eigen::Matrix3f R = P_.R_cam_from_tof.cast<float>();
+    Eigen::Vector3f u_to(0.f, 0.f, 1.f);
+    Eigen::Vector3f u_cam = R * u_to;
     u_cam.normalize();
     return u_cam;
   }
-  // Multi-pixel fallback
-  const double fx = deg2rad(P_.fov_x_deg);
-  const double fy = deg2rad(P_.fov_y_deg);
-  const double cx = (P_.Nx) * 0.5;
-  const double cy = (P_.Ny) * 0.5;
-  const double ax = ((ix + 0.5) - cx) * (fx / P_.Nx);
-  const double ay = ((iy + 0.5) - cy) * (fy / P_.Ny);
-  Vector3d u_to(std::tan(ax), std::tan(ay), 1.0);
+
+  // Multi-pixel support (not used in single-beam, but kept clean)
+  const float fx = fdeg2rad(static_cast<float>(P_.fov_x_deg));
+  const float fy = fdeg2rad(static_cast<float>(P_.fov_y_deg));
+  const float cx = 0.5f * static_cast<float>(P_.Nx);
+  const float cy = 0.5f * static_cast<float>(P_.Ny);
+
+  const float ax = ((ix + 0.5f) - cx) * (fx / static_cast<float>(P_.Nx));
+  const float ay = ((iy + 0.5f) - cy) * (fy / static_cast<float>(P_.Ny));
+
+  Eigen::Vector3f u_to(std::tan(ax), std::tan(ay), 1.f);
   u_to.normalize();
-  Vector3d u_cam = P_.R_cam_from_tof * u_to;
+
+  const Eigen::Matrix3f R = P_.R_cam_from_tof.cast<float>();
+  Eigen::Vector3f u_cam = R * u_to;
   u_cam.normalize();
   return u_cam;
 }
 
-bool ScaleSupervisor::GatherNearby3D_FromMap(KeyFrame* pKF, const Vector2d& px, int rad,
-                                             std::vector<Vector3d>& pts_cam) const
+/**
+ * Collect MapPoints near a given pixel location (px) and return their
+ * 3D coordinates in the **camera** frame of pKF. Pure float math.
+ *
+ * We use:
+ *  - pKF->GetPose()  (Sophus::SE3f) to get Tcw
+ *  - pKF->mvKeysUn   for keypoint pixels
+ *  - pKF->GetMapPoint(i) for the 3D world pos (Eigen::Vector3f)
+ *  - pKF intrinsics (fx,fy,cx,cy)
+ */
+bool ScaleSupervisor::GatherNearby3D_FromMap(KeyFrame* pKF,
+                                             const Eigen::Vector2f& px,
+                                             int rad,
+                                             std::vector<Eigen::Vector3f>& pts_cam) const
 {
   pts_cam.clear();
 
-  // Camera-from-world pose of this KF
-  const Eigen::Matrix4d Tcw = ORB_SLAM3::Converter::toMatrix4d(pKF->GetPose());
+  const Sophus::SE3f  Tcw_se3 = pKF->GetPose();
+  const Eigen::Matrix4f Tcw   = Tcw_se3.matrix();
 
-  // Intrinsics & bounds
   const float fx = pKF->fx, fy = pKF->fy, cx = pKF->cx, cy = pKF->cy;
-  const int w = pKF->imLeft.cols, h = pKF->imLeft.rows;
 
   const std::vector<cv::KeyPoint>& vKeys = pKF->mvKeysUn;
-  const int N = vKeys.size();
+  const int N = static_cast<int>(vKeys.size());
 
-  for (int i=0; i<N; ++i){
+  for (int i = 0; i < N; ++i) {
     const float u = vKeys[i].pt.x;
     const float v = vKeys[i].pt.y;
+
+    // quick pixel-window pre-gate
     if (std::abs(u - px.x()) > rad || std::abs(v - px.y()) > rad) continue;
 
     MapPoint* pMP = pKF->GetMapPoint(i);
     if (!pMP || pMP->isBad()) continue;
 
-    const Eigen::Vector3d Xw = ORB_SLAM3::Converter::toVector3d(pMP->GetWorldPos());
-    const Eigen::Vector4d Xc4 = Tcw * Eigen::Vector4d(Xw.x(),Xw.y(),Xw.z(),1.0);
-    Vector3d Xc = Xc4.head<3>();
-    if (Xc.z() <= 0.05) continue;
+    // ORB-SLAM3 MapPoint::GetWorldPos() returns Eigen::Vector3f
+    const Eigen::Vector3f Xw = pMP->GetWorldPos();
 
+    const Eigen::Vector4f Xc4 = Tcw * Eigen::Vector4f(Xw.x(), Xw.y(), Xw.z(), 1.f);
+    Eigen::Vector3f Xc = Xc4.head<3>();
+
+    if (Xc.z() <= 0.05f) continue; // behind camera / too close to plane at z=0
+
+    // Reproject into this KF pixel plane (for a tighter neighborhood check)
     const float uu = fx * (Xc.x() / Xc.z()) + cx;
     const float vv = fy * (Xc.y() / Xc.z()) + cy;
-    if (!(uu >= 0 && uu < w && vv >= 0 && vv < h)) continue;
+
     if (std::abs(uu - px.x()) > rad || std::abs(vv - px.y()) > rad) continue;
 
     pts_cam.push_back(Xc);
   }
-  return (int)pts_cam.size() >= 6;
+
+  // a few points are needed to fit a plane robustly
+  return static_cast<int>(pts_cam.size()) >= 6;
 }
 
-bool ScaleSupervisor::RobustPlaneRANSAC(const std::vector<Vector3d>& pts,
-                                        double thresh, int min_inliers,
-                                        Vector3d& P0, Vector3d& n, int& ninl) const
+/**
+ * Robust plane fitting in camera frame via RANSAC + LS refine (float math).
+ * Returns plane point P0 (on plane), unit normal n, and inlier count ninl.
+ */
+bool ScaleSupervisor::RobustPlaneRANSAC(const std::vector<Eigen::Vector3f>& pts,
+                                        float thresh,
+                                        int min_inliers,
+                                        Eigen::Vector3f& P0,
+                                        Eigen::Vector3f& n,
+                                        int& ninl) const
 {
-  if ((int)pts.size() < std::max(min_inliers, 6)) return false;
+  if (static_cast<int>(pts.size()) < std::max(min_inliers, 6)) return false;
 
   std::mt19937 rng(12345);
-  std::uniform_int_distribution<int> uni(0, (int)pts.size()-1);
+  std::uniform_int_distribution<int> uni(0, static_cast<int>(pts.size()) - 1);
 
-  int best_inl = -1;
-  Vector3d best_n(0,0,1), best_P0(0,0,0);
+  int best = -1;
+  Eigen::Vector3f bN(0.f,0.f,1.f), bP(0.f,0.f,0.f);
 
-  const int iters = 200;
-  for (int it=0; it<iters; ++it){
-    const Vector3d a = pts[uni(rng)];
-    const Vector3d b = pts[uni(rng)];
-    const Vector3d c = pts[uni(rng)];
-    Vector3d n_cand = (b - a).cross(c - a);
-    const double nn = n_cand.norm();
-    if (nn < 1e-6) continue;
-    n_cand /= nn;
+  // RANSAC
+  for (int it = 0; it < 200; ++it) {
+    const Eigen::Vector3f a = pts[uni(rng)];
+    const Eigen::Vector3f b = pts[uni(rng)];
+    const Eigen::Vector3f c = pts[uni(rng)];
+
+    Eigen::Vector3f nc = (b - a).cross(c - a);
+    const float nn = nc.norm();
+    if (nn < 1e-6f) continue;
+    nc /= nn;
 
     int inl = 0;
-    for (size_t k=0; k<pts.size(); ++k){
-      double d = std::abs(n_cand.dot(pts[k] - a));
+    for (size_t k = 0; k < pts.size(); ++k) {
+      const float d = std::abs(nc.dot(pts[k] - a));
       if (d < thresh) ++inl;
     }
-    if (inl > best_inl){
-      best_inl = inl;
-      best_n   = n_cand;
-      best_P0  = a;
-    }
+    if (inl > best) { best = inl; bN = nc; bP = a; }
   }
 
-  if (best_inl < min_inliers) return false;
+  if (best < min_inliers) return false;
 
-  // refine with LS on inliers
-  std::vector<Vector3d> inl_pts; inl_pts.reserve(best_inl);
-  for (size_t k=0; k<pts.size(); ++k){
-    double d = std::abs(best_n.dot(pts[k] - best_P0));
-    if (d < thresh) inl_pts.push_back(pts[k]);
+  // LS refine on inliers
+  std::vector<Eigen::Vector3f> inl; inl.reserve(best);
+  for (size_t k = 0; k < pts.size(); ++k) {
+    const float d = std::abs(bN.dot(pts[k] - bP));
+    if (d < thresh) inl.push_back(pts[k]);
   }
 
-  Vector3d mu = Vector3d::Zero();
-  for (size_t k=0; k<inl_pts.size(); ++k) mu += inl_pts[k];
-  mu /= (double)inl_pts.size();
+  Eigen::Vector3f mu = Eigen::Vector3f::Zero();
+  for (size_t k = 0; k < inl.size(); ++k) mu += inl[k];
+  mu /= static_cast<float>(inl.size());
 
-  Eigen::Matrix3d C = Eigen::Matrix3d::Zero();
-  for (size_t k=0; k<inl_pts.size(); ++k){
-    Vector3d q = inl_pts[k] - mu;
-    C += q*q.transpose();
+  Eigen::Matrix3f C = Eigen::Matrix3f::Zero();
+  for (size_t k = 0; k < inl.size(); ++k) {
+    const Eigen::Vector3f q = inl[k] - mu;
+    C += q * q.transpose();
   }
-  Eigen::SelfAdjointEigenSolver<Matrix3d> es(C);
+
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es(C);
   n = es.eigenvectors().col(0);
   n.normalize();
-  P0 = mu;
-  ninl = (int)inl_pts.size();
+
+  P0   = mu;
+  ninl = static_cast<int>(inl.size());
   return true;
 }
 
-bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF, const Vector2d& px,
-                                           Vector3d& P0, Vector3d& n, int& inliers) const
+/**
+ * Fit a local plane from MapPoints around pixel px in the current KF.
+ * - Collects camera-frame 3D points near px
+ * - Adapts RANSAC threshold with median depth
+ * - Returns plane (P0, n) and inlier count
+ */
+bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
+                                           const Eigen::Vector2f& px,
+                                           Eigen::Vector3f& P0,
+                                           Eigen::Vector3f& n,
+                                           int& inliers) const
 {
-  std::vector<Vector3d> pts;
+  std::vector<Eigen::Vector3f> pts;
   if (!GatherNearby3D_FromMap(pKF, px, P_.win_radius_px, pts)) return false;
 
-  // Scale distance threshold loosely with median Z
-  double medz;
+  // scale RANSAC threshold with median Z for mild depth-adaptivity
+  float medz;
   {
-    std::vector<double> zs; zs.reserve(pts.size());
-    for (size_t i=0;i<pts.size();++i) zs.push_back(pts[i].z());
-    std::nth_element(zs.begin(), zs.begin()+zs.size()/2, zs.end());
+    std::vector<float> zs; zs.reserve(pts.size());
+    for (size_t i = 0; i < pts.size(); ++i) zs.push_back(pts[i].z());
+    std::nth_element(zs.begin(), zs.begin() + zs.size()/2, zs.end());
     medz = zs[zs.size()/2];
   }
-  const double th = std::max(0.01, P_.ransac_thresh_m * (medz / 10.0));
-  const int    min_inl = std::max(P_.min_plane_inliers, 8);
+
+  const float th = std::max(0.01f,
+                            static_cast<float>(P_.ransac_thresh_m) * (medz / 10.0f));
+  const int   min_inl = std::max(P_.min_plane_inliers, 8);
 
   return RobustPlaneRANSAC(pts, th, min_inl, P0, n, inliers);
 }
 
-// --------- Phase 2 main (log only) ---------
-
-bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* pKF, double* /*lambda_out*/)
+/**
+ * Ray/plane intersection (float). Returns distance rhat along the ray direction.
+ * (Unused in Phase 2, but implemented for Phase 3.)
+ */
+bool ScaleSupervisor::IntersectRayPlane(const Eigen::Vector3f& O,
+                                        const Eigen::Vector3f& d_unit,
+                                        const Eigen::Vector3f& P0,
+                                        const Eigen::Vector3f& n,
+                                        float& rhat) const
 {
-  // 1) Build ToF single-beam ray in camera frame
-  const int ix = 0, iy = 0; // single pixel
-  Vector3d d_cam = RayDirCamFrame(ix,iy);
-  if (std::abs(d_cam.z()) < 1e-6) return false;
-
-  // 2) Project that ray to a pixel (for neighborhood search)
-  const float fx = pKF->fx, fy = pKF->fy, cx = pKF->cx, cy = pKF->cy;
-  Vector2d px( fx * (d_cam.x()/d_cam.z()) + cx,  fy * (d_cam.y()/d_cam.z()) + cy );
-
-  // 3) Fit a local plane from MapPoints near that pixel window
-  Vector3d P0, n; int ninl=0;
-  if (!FitLocalPlaneFromMap(pKF, px, P0, n, ninl)) {
-    std::cout << "[ToF] KF " << pKF->mnId << " plane: NO_FIT (pts<inliers)\n";
-    return false;
-  }
-
-  // 4) Gate by incidence angle (helps reject near-edge cases)
-  const double cosang = std::abs(n.normalized().dot(d_cam.normalized()));
-  if (cosang < P_.incidence_min_dot) {
-    std::cout << "[ToF] KF " << pKF->mnId << " plane: REJECT (incidence=" << cosang
-              << ", inliers="<< ninl << ")\n";
-    return false;
-  }
-
-  // Phase 2: only LOG (no lambda yet, no scaling)
-  std::cout << "[ToF] KF " << pKF->mnId << " plane: OK  (inliers=" << ninl
-            << ", px=[" << px.x() << "," << px.y() << "], cos=" << cosang << ")\n";
-  return false; // no lambda produced yet
+  const float denom = n.dot(d_unit);
+  if (std::abs(denom) < 1e-6f) return false;
+  const float t = n.dot(P0 - O) / denom;
+  if (t <= 0.f) return false;
+  rhat = t;
+  return true;
 }
 
 } // namespace ORB_SLAM3

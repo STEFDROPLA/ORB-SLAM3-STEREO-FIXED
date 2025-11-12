@@ -215,6 +215,7 @@ public:
 #endif
 
     void UpdateToFScan(const ToFScan& s);
+    
     friend class Tracking;
     friend class LocalMapping;
 
@@ -288,6 +289,8 @@ private:
     string mStrVocabularyFilePath;
 
     Settings* settings_;
+
+
 
     ScaleSupervisor* mpScaleSup = nullptr;
 
