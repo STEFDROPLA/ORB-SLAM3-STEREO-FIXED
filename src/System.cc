@@ -256,6 +256,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
     ScaleSupervisor::Params P;
+
+    // --- ToF→Camera extrinsics (Phase 2: rotation only is used) ---
+    P.R_cam_from_tof = Eigen::Matrix3d::Identity();    // ok as a starting guess
+    P.t_cam_from_tof = Eigen::Vector3d(0.0, 0.0, 0.0); // Phase 3 will use this
+    
     mpScaleSup = new ScaleSupervisor(P);
 }
 
