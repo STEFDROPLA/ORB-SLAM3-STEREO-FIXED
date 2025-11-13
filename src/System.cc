@@ -257,11 +257,17 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     ScaleSupervisor::Params P;
 
-    // --- ToF→Camera extrinsics (Phase 2: rotation only is used) ---
-    P.R_cam_from_tof = Eigen::Matrix3d::Identity();    // ok as a starting guess
-    P.t_cam_from_tof = Eigen::Vector3d(0.0, 0.0, 0.0); // Phase 3 will use this
-    
+    settings_->exportToFParams(P);        // <-- pulls values from the YAML
     mpScaleSup = new ScaleSupervisor(P);
+
+    if (settings_->tof().enabled) {
+        std::cout << "[ToF] Enabled. Nx=" << settings_->tof().Nx
+                << " Ny=" << settings_->tof().Ny
+                << " FoVx=" << settings_->tof().fov_x_deg
+                << " FoVy=" << settings_->tof().fov_y_deg << std::endl;
+    } else {
+        std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
+    }
 }
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)

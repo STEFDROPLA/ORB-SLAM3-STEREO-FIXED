@@ -23,6 +23,9 @@
 
 #include "System.h"
 
+#include "ScaleSupervisor.h"
+
+
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/core/eigen.hpp>
 
@@ -176,6 +179,19 @@ namespace ORB_SLAM3 {
         if(bNeedToRectify_){
             precomputeRectificationMaps();
             cout << "\t-Computed rectification maps" << endl;
+        }
+
+
+
+        if (settings.tof().enabled) {
+            output << "\t-ToF enabled: yes\n";
+            output << "\t  Nx=" << settings.tof().Nx
+                << " Ny=" << settings.tof().Ny
+                << " FoVx=" << settings.tof().fov_x_deg
+                << " FoVy=" << settings.tof().fov_y_deg << "\n";
+            output << "\t  win_radius_px=" << settings.tof().win_radius_px
+                << " min_plane_inliers=" << settings.tof().min_plane_inliers
+                << " ransac_thresh_m=" << settings.tof().ransac_thresh_m << "\n";
         }
 
         cout << "----------------------------------" << endl;
@@ -481,6 +497,96 @@ namespace ORB_SLAM3 {
 
         thFarPoints_ = readParameter<float>(fSettings,"System.thFarPoints",found,false);
     }
+
+
+    //ADDED READER FOR THE 1D LASER PARAMETERS
+    void Settings::readToF(cv::FileStorage &fSettings) {
+        bool found;
+
+        // Optional enable flag; default off
+        int tofEnabled = readParameter<int>(fSettings, "ToF.Enabled", found, /*required=*/false);
+        tof_params_.enabled = found ? (tofEnabled != 0) : false;
+
+        // Grid & FoV (for multi-pixel ToF; harmless for 1x1)
+        int Nx = readParameter<int>(fSettings, "ToF.Nx", found, false);
+        if (found) tof_params_.Nx = Nx;
+        int Ny = readParameter<int>(fSettings, "ToF.Ny", found, false);
+        if (found) tof_params_.Ny = Ny;
+
+        float fovx = readParameter<float>(fSettings, "ToF.FoV_X_deg", found, false);
+        if (found) tof_params_.fov_x_deg = static_cast<double>(fovx);
+        float fovy = readParameter<float>(fSettings, "ToF.FoV_Y_deg", found, false);
+        if (found) tof_params_.fov_y_deg = static_cast<double>(fovy);
+
+        // Plane-fit and robustness knobs
+        int winr = readParameter<int>(fSettings, "ToF.win_radius_px", found, false);
+        if (found) tof_params_.win_radius_px = winr;
+
+        float dotmin = readParameter<float>(fSettings, "ToF.incidence_min_dot", found, false);
+        if (found) tof_params_.incidence_min_dot = static_cast<double>(dotmin);
+
+        int minInl = readParameter<int>(fSettings, "ToF.min_plane_inliers", found, false);
+        if (found) tof_params_.min_plane_inliers = minInl;
+
+        float rth = readParameter<float>(fSettings, "ToF.ransac_thresh_m", found, false);
+        if (found) tof_params_.ransac_thresh_m = static_cast<double>(rth);
+
+        int minRays = readParameter<int>(fSettings, "ToF.min_good_rays", found, false);
+        if (found) tof_params_.min_good_rays = minRays;
+
+        int histLen = readParameter<int>(fSettings, "ToF.hist_len", found, false);
+        if (found) tof_params_.hist_len = histLen;
+
+        float rho2 = readParameter<float>(fSettings, "ToF.rho2", found, false);
+        if (found) tof_params_.rho2 = static_cast<double>(rho2);
+
+        float sigma = readParameter<float>(fSettings, "ToF.sigma", found, false);
+        if (found) tof_params_.sigma = static_cast<double>(sigma);
+
+        // Extrinsics: R_cam_from_tof (3x3), t_cam_from_tof (3x1)
+        cv::Mat Rcv = readParameter<cv::Mat>(fSettings, "ToF.R_cam_from_tof", found, false);
+        if (found) {
+            if (Rcv.rows == 3 && Rcv.cols == 3) {
+                cv::Mat R64; Rcv.convertTo(R64, CV_64F);
+                cv::cv2eigen(R64, tof_params_.R_cam_from_tof);
+            } else {
+                std::cerr << "[ToF] R_cam_from_tof must be 3x3; ignoring provided matrix.\n";
+            }
+        }
+
+        cv::Mat tcv = readParameter<cv::Mat>(fSettings, "ToF.t_cam_from_tof", found, false);
+        if (found) {
+            if ((tcv.rows == 3 && tcv.cols == 1) || (tcv.rows == 1 && tcv.cols == 3)) {
+                cv::Mat t64; tcv.convertTo(t64, CV_64F);
+                Eigen::Matrix<double,3,1> t;
+                cv::cv2eigen(t64.reshape(1,3), t);
+                tof_params_.t_cam_from_tof = t;
+            } else {
+                std::cerr << "[ToF] t_cam_from_tof must be 3x1 or 1x3; ignoring provided vector.\n";
+            }
+        }
+    }
+
+    void Settings::exportToFParams(ORB_SLAM3::ScaleSupervisor::Params &P) const {
+        // Caller can skip if not enabled, but we fill anyway
+        P.Nx = tof_params_.Nx; P.Ny = tof_params_.Ny;
+        P.fov_x_deg = tof_params_.fov_x_deg;
+        P.fov_y_deg = tof_params_.fov_y_deg;
+        P.win_radius_px = tof_params_.win_radius_px;
+        P.incidence_min_dot = tof_params_.incidence_min_dot;
+        P.min_plane_inliers = tof_params_.min_plane_inliers;
+        P.ransac_thresh_m = tof_params_.ransac_thresh_m;
+        P.min_good_rays = tof_params_.min_good_rays;
+        P.hist_len = tof_params_.hist_len;
+        P.rho2 = tof_params_.rho2;
+        P.sigma = tof_params_.sigma;
+        P.R_cam_from_tof = tof_params_.R_cam_from_tof;
+        P.t_cam_from_tof = tof_params_.t_cam_from_tof;
+    }
+
+
+
+
 
     void Settings::precomputeRectificationMaps() {
         //Precompute rectification maps, new calibrations, ...
