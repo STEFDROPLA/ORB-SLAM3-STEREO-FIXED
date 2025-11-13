@@ -24,6 +24,8 @@
 //#define REGISTER_TIMES
 
 #include "CameraModels/GeometricCamera.h"
+#include "ScaleSupervisor.h"   // <-- add this line
+
 
 #include <unistd.h>
 #include <stdio.h>

@@ -21,9 +21,8 @@
 #include "CameraModels/Pinhole.h"
 #include "CameraModels/KannalaBrandt8.h"
 
-#include "System.h"
 
-#include "ScaleSupervisor.h"
+
 
 
 #include <opencv2/core/persistence.hpp>
