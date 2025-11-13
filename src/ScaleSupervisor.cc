@@ -235,11 +235,43 @@ bool ScaleSupervisor::IntersectRayPlane(const Eigen::Vector3f& O,
   return true;
 }
 
-bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* /*kf*/, double* lambda_out)
+bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
 {
-  // Phase 2: no computation yet. Provide a safe stub so linking succeeds.
-  if (lambda_out) *lambda_out = 1.0;  // neutral scale
-  return false;                        // “no lambda available”
+  if (lambda_out) *lambda_out = 1.0; // neutral (we don’t change scale in Phase 2)
+
+  if (!kf) return false;
+
+  // 1) Single-beam ray in camera frame
+  const int ix = 0, iy = 0;
+  const Eigen::Vector3f d_cam = RayDirCamFrame(ix, iy); // unit vector
+  if (std::abs(d_cam.z()) < 1e-6f) {
+    std::cout << "[ToF-DBG] Ray z too small\n";
+    return false;
+  }
+
+  // 2) Project to pixel (defines the neighborhood)
+  const float fx = kf->fx, fy = kf->fy, cx = kf->cx, cy = kf->cy;
+  const Eigen::Vector2f px( fx * (d_cam.x()/d_cam.z()) + cx,
+                            fy * (d_cam.y()/d_cam.z()) + cy );
+
+  // 3) Fit a local plane from MapPoints around px
+  Eigen::Vector3f P0, n; int ninl = 0;
+  const bool ok_plane = FitLocalPlaneFromMap(kf, px, P0, n, ninl);
+
+  // 4) Print diagnostics
+  if (ok_plane) {
+    std::cout << "[ToF-DBG] KF " << kf->mnId
+              << " px=(" << px.x() << "," << px.y() << ")"
+              << " inliers=" << ninl
+              << " plane_n=[" << n.x() << "," << n.y() << "," << n.z() << "]\n";
+  } else {
+    std::cout << "[ToF-DBG] KF " << kf->mnId
+              << " px=(" << px.x() << "," << px.y() << ")"
+              << " plane_fit=FAIL (insufficient points)\n";
+  }
+
+  // Phase 2: return false to indicate we did not compute lambda yet
+  return false;
 }
 
 bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* /*kf*/)
