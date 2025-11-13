@@ -34,11 +34,9 @@ public:
   // Feed latest ToF scan (kept for Phase 3; unused by Phase 2 logging)
   void UpdateToFScan(const ToFScan& s);
 
-  // Phase 2: fit a plane near the ToF ray & LOG results; returns false (no lambda in phase 2)
-  bool ComputeLambdaForKeyFrame(KeyFrame* kf, double* /*lambda_out*/ = 0);
+  bool ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out = 0);
+  bool MaybeApplyLocalScale(KeyFrame* kf);
 
-  // Phase 2: still a stub (no scaling)
-  bool MaybeApplyLocalScale(KeyFrame* /*kf*/) { return false; }
 
 private:
   
