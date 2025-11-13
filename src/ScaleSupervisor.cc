@@ -235,4 +235,17 @@ bool ScaleSupervisor::IntersectRayPlane(const Eigen::Vector3f& O,
   return true;
 }
 
+bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* /*kf*/, double* lambda_out)
+{
+  // Phase 2: no computation yet. Provide a safe stub so linking succeeds.
+  if (lambda_out) *lambda_out = 1.0;  // neutral scale
+  return false;                        // “no lambda available”
+}
+
+bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* /*kf*/)
+{
+  // Phase 2: do nothing (no map modifications yet).
+  return false;
+}
+
 } // namespace ORB_SLAM3
