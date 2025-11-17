@@ -571,26 +571,7 @@ namespace ORB_SLAM3 {
         }
     }
 
-    void Settings::exportToFParams(ORB_SLAM3::ScaleSupervisor::Params &P) const {
-        // Caller can skip if not enabled, but we fill anyway
-        P.Nx = tof_params_.Nx; P.Ny = tof_params_.Ny;
-        P.fov_x_deg = tof_params_.fov_x_deg;
-        P.fov_y_deg = tof_params_.fov_y_deg;
-        P.win_radius_px = tof_params_.win_radius_px;
-        P.incidence_min_dot = tof_params_.incidence_min_dot;
-        P.min_plane_inliers = tof_params_.min_plane_inliers;
-        P.ransac_thresh_m = tof_params_.ransac_thresh_m;
-        P.min_good_rays = tof_params_.min_good_rays;
-        P.hist_len = tof_params_.hist_len;
-        P.rho2 = tof_params_.rho2;
-        P.sigma = tof_params_.sigma;
-        P.R_cam_from_tof = tof_params_.R_cam_from_tof;
-        P.t_cam_from_tof = tof_params_.t_cam_from_tof;
-    }
-
-
-
-
+    
 
     void Settings::precomputeRectificationMaps() {
         //Precompute rectification maps, new calibrations, ...
