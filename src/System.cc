@@ -255,17 +255,34 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
-    ScaleSupervisor::Params P;
-
-    settings_->exportToFParams(P);        // <-- pulls values from the YAML
-    mpScaleSup = new ScaleSupervisor(P);
-
     if (settings_->tof().enabled) {
-        std::cout << "[ToF] Enabled. Nx=" << settings_->tof().Nx
-                << " Ny=" << settings_->tof().Ny
-                << " FoVx=" << settings_->tof().fov_x_deg
-                << " FoVy=" << settings_->tof().fov_y_deg << std::endl;
+        // Fill params from Settings
+        const auto& T = settings_->tof();
+        ScaleSupervisor::Params P;
+        P.Nx = T.Nx; P.Ny = T.Ny;
+        P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
+        P.win_radius_px    = T.win_radius_px;
+        P.incidence_min_dot = T.incidence_min_dot;
+        P.min_plane_inliers = T.min_plane_inliers;
+        P.ransac_thresh_m   = T.ransac_thresh_m;
+        P.min_good_rays     = T.min_good_rays;
+        P.hist_len          = T.hist_len;
+        P.rho2 = T.rho2; P.sigma = T.sigma;
+        P.R_cam_from_tof = T.R_cam_from_tof;
+        P.t_cam_from_tof = T.t_cam_from_tof;
+
+        // Choose the correct ctor signature:
+        // If your class is ScaleSupervisor(LocalMapping*, const Params&)
+        mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
+        // If your class is ScaleSupervisor(const Params&) use:
+        // mpScaleSup = new ScaleSupervisor(P);
+
+        std::cout << "[ToF] Enabled. Nx=" << T.Nx
+                << " Ny=" << T.Ny
+                << " FoVx=" << T.fov_x_deg
+                << " FoVy=" << T.fov_y_deg << std::endl;
     } else {
+        mpScaleSup = nullptr;
         std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
     }
 }

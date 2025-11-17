@@ -151,8 +151,7 @@ namespace ORB_SLAM3 {
         // Accessor
         const ToFParams& tof() const { return tof_params_; }
 
-        // Fill ScaleSupervisor::Params (so System can pass it straight in)
-        void exportToFParams(struct ORB_SLAM3::ScaleSupervisor::Params &P) const;
+        
 
     private:
         template<typename T>
