@@ -34,6 +34,29 @@
 
 namespace ORB_SLAM3 {
 
+
+
+    //PARAMETERS FOR THE 1D LASER
+
+    struct ToFParams {
+        bool   enabled = false;        // set true if ToF is present
+        int    Nx = 1, Ny = 1;         // grid size (1x1 for single-beam)
+        double fov_x_deg = 0.0;        // FoV (multi-pixel modules; ignored if 1x1)
+        double fov_y_deg = 0.0;
+        int    win_radius_px = 22;     // neighborhood for plane fit
+        double incidence_min_dot = 0.30;
+        int    min_plane_inliers = 12;
+        double ransac_thresh_m = 0.03;
+        int    min_good_rays = 1;
+        int    hist_len = 5;
+        double rho2 = 0.05, sigma = 0.01;
+
+        // Extrinsics: Camera <- ToF (ToF in camera frame)
+        // R is 3x3, t is 3x1, meters.
+        Eigen::Matrix3d R_cam_from_tof = Eigen::Matrix3d::Identity();
+        Eigen::Vector3d t_cam_from_tof = Eigen::Vector3d::Zero();
+    };
+
     class System;
 
 
@@ -127,26 +150,7 @@ namespace ORB_SLAM3 {
         cv::Mat M1r() {return M1r_;}
         cv::Mat M2r() {return M2r_;}
 
-        //PARAMETERS FOR THE 1D LASER
-
-        struct ToFParams {
-            bool   enabled = false;        // set true if ToF is present
-            int    Nx = 1, Ny = 1;         // grid size (1x1 for single-beam)
-            double fov_x_deg = 0.0;        // FoV (multi-pixel modules; ignored if 1x1)
-            double fov_y_deg = 0.0;
-            int    win_radius_px = 22;     // neighborhood for plane fit
-            double incidence_min_dot = 0.30;
-            int    min_plane_inliers = 12;
-            double ransac_thresh_m = 0.03;
-            int    min_good_rays = 1;
-            int    hist_len = 5;
-            double rho2 = 0.05, sigma = 0.01;
-
-            // Extrinsics: Camera <- ToF (ToF in camera frame)
-            // R is 3x3, t is 3x1, meters.
-            Eigen::Matrix3d R_cam_from_tof = Eigen::Matrix3d::Identity();
-            Eigen::Vector3d t_cam_from_tof = Eigen::Vector3d::Zero();
-        };
+        
 
         // Accessor
         const ToFParams& tof() const { return tof_params_; }
