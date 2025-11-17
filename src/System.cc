@@ -273,9 +273,9 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
         // Choose the correct ctor signature:
         // If your class is ScaleSupervisor(LocalMapping*, const Params&)
-        mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
+        //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
         // If your class is ScaleSupervisor(const Params&) use:
-        // mpScaleSup = new ScaleSupervisor(P);
+        mpScaleSup = new ScaleSupervisor(P);
 
         std::cout << "[ToF] Enabled. Nx=" << T.Nx
                 << " Ny=" << T.Ny
@@ -1689,6 +1689,5 @@ bool System::ScaleRefinementNow(bool run_full_ba, double* s_out)
 void System::UpdateToFScan(const ToFScan& s) {
   if (mpScaleSup) mpScaleSup->UpdateToFScan(s);
 }
-
 } //namespace ORB_SLAM
 
