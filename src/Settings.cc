@@ -182,16 +182,21 @@ namespace ORB_SLAM3 {
 
 
 
-        if (settings.tof().enabled) {
-            output << "\t-ToF enabled: yes\n";
-            output << "\t  Nx=" << settings.tof().Nx
-                << " Ny=" << settings.tof().Ny
-                << " FoVx=" << settings.tof().fov_x_deg
-                << " FoVy=" << settings.tof().fov_y_deg << "\n";
-            output << "\t  win_radius_px=" << settings.tof().win_radius_px
-                << " min_plane_inliers=" << settings.tof().min_plane_inliers
-                << " ransac_thresh_m=" << settings.tof().ransac_thresh_m << "\n";
+        // --- ToF (1D laser) params ---
+        readToF(fSettings);
+        if (tof().enabled) {
+            std::cout << "\t-Loaded ToF (1D laser) settings\n";
+            std::cout << "\t  Nx=" << tof().Nx
+                    << " Ny=" << tof().Ny
+                    << " FoVx=" << tof().fov_x_deg
+                    << " FoVy=" << tof().fov_y_deg << "\n";
+            std::cout << "\t  win_radius_px=" << tof().win_radius_px
+                    << " min_plane_inliers=" << tof().min_plane_inliers
+                    << " ransac_thresh_m=" << tof().ransac_thresh_m << "\n";
+        } else {
+            std::cout << "\t-No ToF settings (ToF.Enabled=0 or missing)\n";
         }
+
 
         cout << "----------------------------------" << endl;
     }
