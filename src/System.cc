@@ -236,7 +236,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
-
+    cout << "Here2" << endl;
     
   
     //usleep(10*1000*1000);
@@ -251,7 +251,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpLoopCloser->mpViewer = mpViewer;
         mpViewer->both = mpFrameDrawer->both;
     }
-
+    cout << "Here1" << endl;
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
@@ -276,14 +276,14 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
         // If your class is ScaleSupervisor(const Params&) use:
         mpScaleSup = new ScaleSupervisor(P);
-
-        std::cout << "[ToF] Enabled. Nx=" << T.Nx
+        cout << "Here3" << endl;
+        cout << "[ToF] Enabled. Nx=" << T.Nx
                 << " Ny=" << T.Ny
                 << " FoVx=" << T.fov_x_deg
-                << " FoVy=" << T.fov_y_deg << std::endl;
+                << " FoVy=" << T.fov_y_deg << endl;
     } else {
         mpScaleSup = nullptr;
-        std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
+        cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
     }
 }
 
