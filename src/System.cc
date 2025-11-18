@@ -44,6 +44,8 @@
 #include "ScaleSupervisor.h"
 
 #include <chrono>
+#include <opencv2/core/eigen.hpp>   // declares cv::cv2eigen
+#include <Eigen/Dense>              // Eigen::Matrix3d / Vector3d
 
 
 namespace ORB_SLAM3
