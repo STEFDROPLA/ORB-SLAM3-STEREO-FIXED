@@ -118,65 +118,77 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     }
     
     //reading 1d range finder m
-    // ---- Read ToF.* directly from fsSettings (optional path) ----
-    auto readInt = [&](const char* key, int def)->int{
-    cv::FileNode n = fsSettings[key];
-    return (!n.empty() && n.isInt()) ? (int)n : def;
+    auto getInt    = [&](const char* key, int def)->int {
+        cv::FileNode n = fsSettings[key];
+        return (!n.empty() && n.isInt()) ? (int)n : def;
     };
-    auto readFloat = [&](const char* key, double def)->double{
-    cv::FileNode n = fsSettings[key];
-    if (!n.empty() && (n.isReal() || n.isInt())) return (double)n;
-    return def;
+    auto getFloat  = [&](const char* key, double def)->double {
+        cv::FileNode n = fsSettings[key];
+        if (n.empty()) return def;
+        if (n.isReal()) return (double)n;
+        if (n.isInt())  return (double)((int)n);
+        return def;
     };
-    auto readMat3 = [&](const char* key, Eigen::Matrix3d def)->Eigen::Matrix3d{
-    cv::FileNode n = fsSettings[key];
-    if (!n.empty() && n.isSeq()) {
-        cv::Mat m; fsSettings[key] >> m;
-        if (m.rows == 3 && m.cols == 3) {
-        cv::Mat m64; m.convertTo(m64, CV_64F);
-        Eigen::Matrix3d E; cv::cv2eigen(m64, E); return E;
-        }
-    }
-    return def;
-    };
-    auto readVec3 = [&](const char* key, Eigen::Vector3d def)->Eigen::Vector3d{
-    cv::FileNode n = fsSettings[key];
-    if (!n.empty() && n.isSeq()) {
-        cv::Mat m; fsSettings[key] >> m;
-        cv::Mat m64; m.convertTo(m64, CV_64F);
-        if ((m64.rows==3 && m64.cols==1) || (m64.rows==1 && m64.cols==3)) {
-        Eigen::Vector3d v; cv::cv2eigen(m64.reshape(1,3), v); return v;
-        }
-    }
-    return def;
+    auto getMatOpt = [&](const char* key)->cv::Mat {
+        cv::FileNode n = fsSettings[key];
+        return n.empty() ? cv::Mat() : (cv::Mat)n;
     };
 
-    // Enabled?
-    const bool tofEnabled = readInt("ToF.Enabled", 0) != 0;
+    // Enabled flag (0/1)
+    const bool tofEnabled = getInt("ToF.Enabled", 1) != 0;
 
     if (tofEnabled) {
-    ScaleSupervisor::Params P;
-    P.Nx = readInt("ToF.Nx", 1);
-    P.Ny = readInt("ToF.Ny", 1);
-    P.fov_x_deg = readFloat("ToF.FoV_X_deg", 0.0);
-    P.fov_y_deg = readFloat("ToF.FoV_Y_deg", 0.0);
-    P.win_radius_px     = readInt("ToF.win_radius_px", 22);
-    P.incidence_min_dot = readFloat("ToF.incidence_min_dot", 0.30);
-    P.min_plane_inliers = readInt("ToF.min_plane_inliers", 12);
-    P.ransac_thresh_m   = readFloat("ToF.ransac_thresh_m", 0.03);
-    P.min_good_rays     = readInt("ToF.min_good_rays", 1);
-    P.hist_len          = readInt("ToF.hist_len", 5);
-    P.rho2              = readFloat("ToF.rho2", 0.05);
-    P.sigma             = readFloat("ToF.sigma", 0.01);
-    P.R_cam_from_tof    = readMat3("ToF.R_cam_from_tof", Eigen::Matrix3d::Identity());
-    P.t_cam_from_tof    = readVec3("ToF.t_cam_from_tof", Eigen::Vector3d::Zero());
+        ScaleSupervisor::Params P;
 
-    mpScaleSup = new ScaleSupervisor(P);
-    std::cout << "[ToF] Enabled. Nx=" << P.Nx << " Ny=" << P.Ny
-                << " FoVx=" << P.fov_x_deg << " FoVy=" << P.fov_y_deg << std::endl;
+        // Scalars
+        P.Nx                = getInt   ("ToF.Nx",              1);
+        P.Ny                = getInt   ("ToF.Ny",              1);
+        P.fov_x_deg         = getFloat ("ToF.FoV_X_deg",       0.0);
+        P.fov_y_deg         = getFloat ("ToF.FoV_Y_deg",       0.0);
+        P.win_radius_px     = getInt   ("ToF.win_radius_px",  35);
+        P.incidence_min_dot = getFloat ("ToF.incidence_min_dot", 0.30);
+        P.min_plane_inliers = getInt   ("ToF.min_plane_inliers", 5);
+        P.ransac_thresh_m   = getFloat ("ToF.ransac_thresh_m", 0.03);
+        P.min_good_rays     = getInt   ("ToF.min_good_rays",   1);
+        P.hist_len          = getInt   ("ToF.hist_len",        5);
+        P.rho2              = getFloat ("ToF.rho2",            0.05);
+        P.sigma             = getFloat ("ToF.sigma",           0.01);
+
+        // Extrinsics: R_cam_from_tof (3x3), t_cam_from_tof (3x1 or 1x3)
+        {
+            cv::Mat Rcv = getMatOpt("ToF.R_cam_from_tof");
+            if (!Rcv.empty()) {
+                if (Rcv.rows == 3 && Rcv.cols == 3) {
+                    cv::Mat R64; Rcv.convertTo(R64, CV_64F);
+                    Eigen::Matrix3d R;
+                    cv::cv2eigen(R64, R);
+                    P.R_cam_from_tof = R;
+                } else {
+                    std::cerr << "[ToF] R_cam_from_tof must be 3x3; ignoring.\n";
+                }
+            }
+            cv::Mat tcv = getMatOpt("ToF.t_cam_from_tof");
+            if (!tcv.empty()) {
+                if ((tcv.rows == 3 && tcv.cols == 1) || (tcv.rows == 1 && tcv.cols == 3)) {
+                    cv::Mat t64; tcv.convertTo(t64, CV_64F);
+                    Eigen::Vector3d t;
+                    cv::cv2eigen(t64.reshape(1,3), t);
+                    P.t_cam_from_tof = t;
+                } else {
+                    std::cerr << "[ToF] t_cam_from_tof must be 3x1 or 1x3; ignoring.\n";
+                }
+            }
+        }
+
+        // Construct supervisor
+        mpScaleSup = new ScaleSupervisor(P);
+        std::cout << "[ToF] Enabled. Nx=" << P.Nx
+                << " Ny=" << P.Ny
+                << " FoVx=" << P.fov_x_deg
+                << " FoVy=" << P.fov_y_deg << std::endl;
     } else {
-    mpScaleSup = nullptr;
-    std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
+        mpScaleSup = nullptr;
+        std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
     }
 
 

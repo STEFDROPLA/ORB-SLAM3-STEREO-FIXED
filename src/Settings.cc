@@ -550,7 +550,7 @@ namespace ORB_SLAM3 {
 
 
     //ADDED READER FOR THE 1D LASER PARAMETERS
-    void Settings::readToF(cv::FileStorage &fSettings) {
+    void Settings::readFToF(cv::FileStorage &fSettings) {
         DBG("[ToF] enter readToF");
         bool found;
 
