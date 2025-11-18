@@ -554,47 +554,47 @@ namespace ORB_SLAM3 {
         DBG("[ToF] enter readToF");
         bool found;
 
-        int tofEnabled = readParameter<int>(fSettings, "ToF.Enabled", found, /*required=*/false);
+        int tofEnabled = readParameter<int>(fSettings, "ToF.Enabled", found);
         tof_params_.enabled = found ? (tofEnabled != 0) : false;
 
         // Early log so we know if we’ll parse further
-        std::cerr << "[ToF] enabled=" << tof_params_.enabled << std::endl;
+        cout << "[ToF] enabled=" << tof_params_.enabled << endl;
 
         // These reads are all optional; none should crash:
-        int Nx = readParameter<int>(fSettings, "ToF.Nx", found, false);
+        int Nx = readParameter<int>(fSettings, "ToF.Nx", found);
         if (found) tof_params_.Nx = Nx;
 
-        int Ny = readParameter<int>(fSettings, "ToF.Ny", found, false);
+        int Ny = readParameter<int>(fSettings, "ToF.Ny", found);
         if (found) tof_params_.Ny = Ny;
 
-        float fovx = readParameter<float>(fSettings, "ToF.FoV_X_deg", found, false);
+        float fovx = readParameter<float>(fSettings, "ToF.FoV_X_deg", found);
         if (found) tof_params_.fov_x_deg = (double)fovx;
 
-        float fovy = readParameter<float>(fSettings, "ToF.FoV_Y_deg", found, false);
+        float fovy = readParameter<float>(fSettings, "ToF.FoV_Y_deg", found);
         if (found) tof_params_.fov_y_deg = (double)fovy;
 
-        int winr = readParameter<int>(fSettings, "ToF.win_radius_px", found, false);
+        int winr = readParameter<int>(fSettings, "ToF.win_radius_px", found);
         if (found) tof_params_.win_radius_px = winr;
 
-        float dotmin = readParameter<float>(fSettings, "ToF.incidence_min_dot", found, false);
+        float dotmin = readParameter<float>(fSettings, "ToF.incidence_min_dot", found);
         if (found) tof_params_.incidence_min_dot = (double)dotmin;
 
-        int minInl = readParameter<int>(fSettings, "ToF.min_plane_inliers", found, false);
+        int minInl = readParameter<int>(fSettings, "ToF.min_plane_inliers", found);
         if (found) tof_params_.min_plane_inliers = minInl;
 
-        float rth = readParameter<float>(fSettings, "ToF.ransac_thresh_m", found, false);
+        float rth = readParameter<float>(fSettings, "ToF.ransac_thresh_m", found);
         if (found) tof_params_.ransac_thresh_m = (double)rth;
 
-        int minRays = readParameter<int>(fSettings, "ToF.min_good_rays", found, false);
+        int minRays = readParameter<int>(fSettings, "ToF.min_good_rays", found);
         if (found) tof_params_.min_good_rays = minRays;
 
-        int histLen = readParameter<int>(fSettings, "ToF.hist_len", found, false);
+        int histLen = readParameter<int>(fSettings, "ToF.hist_len", found);
         if (found) tof_params_.hist_len = histLen;
 
-        float rho2 = readParameter<float>(fSettings, "ToF.rho2", found, false);
+        float rho2 = readParameter<float>(fSettings, "ToF.rho2", found);
         if (found) tof_params_.rho2 = (double)rho2;
 
-        float sigma = readParameter<float>(fSettings, "ToF.sigma", found, false);
+        float sigma = readParameter<float>(fSettings, "ToF.sigma", found);
         if (found) tof_params_.sigma = (double)sigma;
 
         // Extrinsics (robust to either OpenCV-matrix or plain YAML lists)

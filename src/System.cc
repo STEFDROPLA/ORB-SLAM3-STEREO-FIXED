@@ -117,11 +117,13 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     
     //reading 1d range finder m
     cout << "HERE, UPLOADING TOF DATA"<< endl;
-    if (settings_->tof().enabled) {
+    if (fsSettings["Enabled"]) {
         // Fill params from Settings
-        const auto& T = settings_->tof();
         ScaleSupervisor::Params P;
-        P.Nx = T.Nx; P.Ny = T.Ny;
+
+        cout << "HERE, IN"<< endl;
+        P.Nx = fsSettings["Nx"]; P.Ny = fsSettings["Ny"];
+        cout << "HERE, NX,NY"<< endl;
         P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
         P.win_radius_px    = T.win_radius_px;
         P.incidence_min_dot = T.incidence_min_dot;
@@ -147,6 +149,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpScaleSup = nullptr;
         cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
     }
+
+
 
 
     node = fsSettings["loopClosing"];
