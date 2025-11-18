@@ -90,38 +90,8 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     cv::FileNode node = fsSettings["File.version"];
     if(!node.empty() && node.isString() && node.string() == "1.0"){
         settings_ = new Settings(strSettingsFile,mSensor);
-
-        cout << "HERE, UPLOADING TOF DATA"<< endl;
-        if (settings_->tof().enabled) {
-            // Fill params from Settings
-            const auto& T = settings_->tof();
-            ScaleSupervisor::Params P;
-            P.Nx = T.Nx; P.Ny = T.Ny;
-            P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
-            P.win_radius_px    = T.win_radius_px;
-            P.incidence_min_dot = T.incidence_min_dot;
-            P.min_plane_inliers = T.min_plane_inliers;
-            P.ransac_thresh_m   = T.ransac_thresh_m;
-            P.min_good_rays     = T.min_good_rays;
-            P.hist_len          = T.hist_len;
-            P.rho2 = T.rho2; P.sigma = T.sigma;
-            P.R_cam_from_tof = T.R_cam_from_tof;
-            P.t_cam_from_tof = T.t_cam_from_tof;
-
-            // Choose the correct ctor signature:
-            // If your class is ScaleSupervisor(LocalMapping*, const Params&)
-            //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
-            // If your class is ScaleSupervisor(const Params&) use:
-            mpScaleSup = new ScaleSupervisor(P);
-            cout << "Here3" << endl;
-            cout << "[ToF] Enabled. Nx=" << T.Nx
-                    << " Ny=" << T.Ny
-                    << " FoVx=" << T.fov_x_deg
-                    << " FoVy=" << T.fov_y_deg << endl;
-        } else {
-            mpScaleSup = nullptr;
-            cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
-        }
+        cout << "settings_"<< endl;
+        
 
         mStrLoadAtlasFromFile = settings_->atlasLoadFile();
         mStrSaveAtlasToFile = settings_->atlasSaveFile();
@@ -132,6 +102,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     else{
         settings_ = nullptr;
         cv::FileNode node = fsSettings["System.LoadAtlasFromFile"];
+        cout << "fsSettings"<< endl;
         if(!node.empty() && node.isString())
         {
             mStrLoadAtlasFromFile = (string)node;
@@ -143,6 +114,40 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
             mStrSaveAtlasToFile = (string)node;
         }
     }
+    
+    //reading 1d range finder m
+    cout << "HERE, UPLOADING TOF DATA"<< endl;
+    if (settings_->tof().enabled) {
+        // Fill params from Settings
+        const auto& T = settings_->tof();
+        ScaleSupervisor::Params P;
+        P.Nx = T.Nx; P.Ny = T.Ny;
+        P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
+        P.win_radius_px    = T.win_radius_px;
+        P.incidence_min_dot = T.incidence_min_dot;
+        P.min_plane_inliers = T.min_plane_inliers;
+        P.ransac_thresh_m   = T.ransac_thresh_m;
+        P.min_good_rays     = T.min_good_rays;
+        P.hist_len          = T.hist_len;
+        P.rho2 = T.rho2; P.sigma = T.sigma;
+        P.R_cam_from_tof = T.R_cam_from_tof;
+        P.t_cam_from_tof = T.t_cam_from_tof;
+
+        // Choose the correct ctor signature:
+        // If your class is ScaleSupervisor(LocalMapping*, const Params&)
+        //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
+        // If your class is ScaleSupervisor(const Params&) use:
+        mpScaleSup = new ScaleSupervisor(P);
+        cout << "Here3" << endl;
+        cout << "[ToF] Enabled. Nx=" << T.Nx
+                << " Ny=" << T.Ny
+                << " FoVx=" << T.fov_x_deg
+                << " FoVy=" << T.fov_y_deg << endl;
+    } else {
+        mpScaleSup = nullptr;
+        cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
+    }
+
 
     node = fsSettings["loopClosing"];
     bool activeLC = true;
