@@ -91,6 +91,38 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     if(!node.empty() && node.isString() && node.string() == "1.0"){
         settings_ = new Settings(strSettingsFile,mSensor);
 
+        cout << "HERE, UPLOADING TOF DATA"<< endl;
+        if (settings_->tof().enabled) {
+            // Fill params from Settings
+            const auto& T = settings_->tof();
+            ScaleSupervisor::Params P;
+            P.Nx = T.Nx; P.Ny = T.Ny;
+            P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
+            P.win_radius_px    = T.win_radius_px;
+            P.incidence_min_dot = T.incidence_min_dot;
+            P.min_plane_inliers = T.min_plane_inliers;
+            P.ransac_thresh_m   = T.ransac_thresh_m;
+            P.min_good_rays     = T.min_good_rays;
+            P.hist_len          = T.hist_len;
+            P.rho2 = T.rho2; P.sigma = T.sigma;
+            P.R_cam_from_tof = T.R_cam_from_tof;
+            P.t_cam_from_tof = T.t_cam_from_tof;
+
+            // Choose the correct ctor signature:
+            // If your class is ScaleSupervisor(LocalMapping*, const Params&)
+            //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
+            // If your class is ScaleSupervisor(const Params&) use:
+            mpScaleSup = new ScaleSupervisor(P);
+            cout << "Here3" << endl;
+            cout << "[ToF] Enabled. Nx=" << T.Nx
+                    << " Ny=" << T.Ny
+                    << " FoVx=" << T.fov_x_deg
+                    << " FoVy=" << T.fov_y_deg << endl;
+        } else {
+            mpScaleSup = nullptr;
+            cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
+        }
+
         mStrLoadAtlasFromFile = settings_->atlasLoadFile();
         mStrSaveAtlasToFile = settings_->atlasSaveFile();
 
@@ -236,7 +268,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
 
     mpLoopCloser->SetTracker(mpTracker);
     mpLoopCloser->SetLocalMapper(mpLocalMapper);
-    cout << "Here2" << endl;
+    cout << "Here1" << endl;
     
   
     //usleep(10*1000*1000);
@@ -251,40 +283,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpLoopCloser->mpViewer = mpViewer;
         mpViewer->both = mpFrameDrawer->both;
     }
-    cout << "Here1" << endl;
+    cout << "2" << endl;
     // Fix verbosity
     Verbose::SetTh(Verbose::VERBOSITY_QUIET);
 
-    if (settings_->tof().enabled) {
-        // Fill params from Settings
-        const auto& T = settings_->tof();
-        ScaleSupervisor::Params P;
-        P.Nx = T.Nx; P.Ny = T.Ny;
-        P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
-        P.win_radius_px    = T.win_radius_px;
-        P.incidence_min_dot = T.incidence_min_dot;
-        P.min_plane_inliers = T.min_plane_inliers;
-        P.ransac_thresh_m   = T.ransac_thresh_m;
-        P.min_good_rays     = T.min_good_rays;
-        P.hist_len          = T.hist_len;
-        P.rho2 = T.rho2; P.sigma = T.sigma;
-        P.R_cam_from_tof = T.R_cam_from_tof;
-        P.t_cam_from_tof = T.t_cam_from_tof;
-
-        // Choose the correct ctor signature:
-        // If your class is ScaleSupervisor(LocalMapping*, const Params&)
-        //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
-        // If your class is ScaleSupervisor(const Params&) use:
-        mpScaleSup = new ScaleSupervisor(P);
-        cout << "Here3" << endl;
-        cout << "[ToF] Enabled. Nx=" << T.Nx
-                << " Ny=" << T.Ny
-                << " FoVx=" << T.fov_x_deg
-                << " FoVy=" << T.fov_y_deg << endl;
-    } else {
-        mpScaleSup = nullptr;
-        cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
-    }
+    
 }
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
