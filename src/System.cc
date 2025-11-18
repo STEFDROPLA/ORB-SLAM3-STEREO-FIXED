@@ -116,41 +116,66 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     }
     
     //reading 1d range finder m
-    cout << "HERE, UPLOADING TOF DATA"<< endl;
-    if (fsSettings["Enabled"]) {
-        // Fill params from Settings
-        ScaleSupervisor::Params P;
-
-        cout << "HERE, IN"<< endl;
-        P.Nx = fsSettings["Nx"]; P.Ny = fsSettings["Ny"];
-        cout << "HERE, NX,NY"<< endl;
-        P.fov_x_deg = T.fov_x_deg; P.fov_y_deg = T.fov_y_deg;
-        P.win_radius_px    = T.win_radius_px;
-        P.incidence_min_dot = T.incidence_min_dot;
-        P.min_plane_inliers = T.min_plane_inliers;
-        P.ransac_thresh_m   = T.ransac_thresh_m;
-        P.min_good_rays     = T.min_good_rays;
-        P.hist_len          = T.hist_len;
-        P.rho2 = T.rho2; P.sigma = T.sigma;
-        P.R_cam_from_tof = T.R_cam_from_tof;
-        P.t_cam_from_tof = T.t_cam_from_tof;
-
-        // Choose the correct ctor signature:
-        // If your class is ScaleSupervisor(LocalMapping*, const Params&)
-        //mpScaleSup = new ScaleSupervisor(mpLocalMapper, P);
-        // If your class is ScaleSupervisor(const Params&) use:
-        mpScaleSup = new ScaleSupervisor(P);
-        cout << "Here3" << endl;
-        cout << "[ToF] Enabled. Nx=" << T.Nx
-                << " Ny=" << T.Ny
-                << " FoVx=" << T.fov_x_deg
-                << " FoVy=" << T.fov_y_deg << endl;
-    } else {
-        mpScaleSup = nullptr;
-        cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << endl;
+    // ---- Read ToF.* directly from fsSettings (optional path) ----
+    auto readInt = [&](const char* key, int def)->int{
+    cv::FileNode n = fsSettings[key];
+    return (!n.empty() && n.isInt()) ? (int)n : def;
+    };
+    auto readFloat = [&](const char* key, double def)->double{
+    cv::FileNode n = fsSettings[key];
+    if (!n.empty() && (n.isReal() || n.isInt())) return (double)n;
+    return def;
+    };
+    auto readMat3 = [&](const char* key, Eigen::Matrix3d def)->Eigen::Matrix3d{
+    cv::FileNode n = fsSettings[key];
+    if (!n.empty() && n.isSeq()) {
+        cv::Mat m; fsSettings[key] >> m;
+        if (m.rows == 3 && m.cols == 3) {
+        cv::Mat m64; m.convertTo(m64, CV_64F);
+        Eigen::Matrix3d E; cv::cv2eigen(m64, E); return E;
+        }
     }
+    return def;
+    };
+    auto readVec3 = [&](const char* key, Eigen::Vector3d def)->Eigen::Vector3d{
+    cv::FileNode n = fsSettings[key];
+    if (!n.empty() && n.isSeq()) {
+        cv::Mat m; fsSettings[key] >> m;
+        cv::Mat m64; m.convertTo(m64, CV_64F);
+        if ((m64.rows==3 && m64.cols==1) || (m64.rows==1 && m64.cols==3)) {
+        Eigen::Vector3d v; cv::cv2eigen(m64.reshape(1,3), v); return v;
+        }
+    }
+    return def;
+    };
 
+    // Enabled?
+    const bool tofEnabled = readInt("ToF.Enabled", 0) != 0;
 
+    if (tofEnabled) {
+    ScaleSupervisor::Params P;
+    P.Nx = readInt("ToF.Nx", 1);
+    P.Ny = readInt("ToF.Ny", 1);
+    P.fov_x_deg = readFloat("ToF.FoV_X_deg", 0.0);
+    P.fov_y_deg = readFloat("ToF.FoV_Y_deg", 0.0);
+    P.win_radius_px     = readInt("ToF.win_radius_px", 22);
+    P.incidence_min_dot = readFloat("ToF.incidence_min_dot", 0.30);
+    P.min_plane_inliers = readInt("ToF.min_plane_inliers", 12);
+    P.ransac_thresh_m   = readFloat("ToF.ransac_thresh_m", 0.03);
+    P.min_good_rays     = readInt("ToF.min_good_rays", 1);
+    P.hist_len          = readInt("ToF.hist_len", 5);
+    P.rho2              = readFloat("ToF.rho2", 0.05);
+    P.sigma             = readFloat("ToF.sigma", 0.01);
+    P.R_cam_from_tof    = readMat3("ToF.R_cam_from_tof", Eigen::Matrix3d::Identity());
+    P.t_cam_from_tof    = readVec3("ToF.t_cam_from_tof", Eigen::Vector3d::Zero());
+
+    mpScaleSup = new ScaleSupervisor(P);
+    std::cout << "[ToF] Enabled. Nx=" << P.Nx << " Ny=" << P.Ny
+                << " FoVx=" << P.fov_x_deg << " FoVy=" << P.fov_y_deg << std::endl;
+    } else {
+    mpScaleSup = nullptr;
+    std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
+    }
 
 
     node = fsSettings["loopClosing"];
