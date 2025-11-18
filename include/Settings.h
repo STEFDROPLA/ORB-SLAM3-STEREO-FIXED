@@ -66,6 +66,7 @@ namespace ORB_SLAM3 {
 
     class Settings {
     public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
         /*
          * Enum for the different camera types implemented
          */

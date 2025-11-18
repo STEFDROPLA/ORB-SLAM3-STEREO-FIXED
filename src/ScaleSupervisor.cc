@@ -9,6 +9,12 @@
 #include <random>
 #include <vector>
 
+#include <iostream>  // you use std::cout
+
+// Aligned Eigen containers (match the aliases you declared in the header)
+using Vec3f  = Eigen::Vector3f;
+using VVec3f = std::vector<Vec3f, Eigen::aligned_allocator<Vec3f>>;
+
 namespace ORB_SLAM3 {
 
 // ---------- small helpers ----------
@@ -77,7 +83,8 @@ Eigen::Vector3f ScaleSupervisor::RayDirCamFrame(int ix, int iy) const
 bool ScaleSupervisor::GatherNearby3D_FromMap(KeyFrame* pKF,
                                              const Eigen::Vector2f& px,
                                              int rad,
-                                             std::vector<Eigen::Vector3f>& pts_cam) const
+                                             VVec3f& pts_cam) const
+
 {
   pts_cam.clear();
 
@@ -124,12 +131,13 @@ bool ScaleSupervisor::GatherNearby3D_FromMap(KeyFrame* pKF,
  * Robust plane fitting in camera frame via RANSAC + LS refine (float math).
  * Returns plane point P0 (on plane), unit normal n, and inlier count ninl.
  */
-bool ScaleSupervisor::RobustPlaneRANSAC(const std::vector<Eigen::Vector3f>& pts,
+bool ScaleSupervisor::RobustPlaneRANSAC(const VVec3f& pts,
                                         float thresh,
                                         int min_inliers,
                                         Eigen::Vector3f& P0,
                                         Eigen::Vector3f& n,
                                         int& ninl) const
+
 {
   if (static_cast<int>(pts.size()) < std::max(min_inliers, 6)) return false;
 
@@ -198,7 +206,7 @@ bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
                                            Eigen::Vector3f& n,
                                            int& inliers) const
 {
-  std::vector<Eigen::Vector3f> pts;
+  VVec3f pts;
   if (!GatherNearby3D_FromMap(pKF, px, P_.win_radius_px, pts)) return false;
 
   // scale RANSAC threshold with median Z for mild depth-adaptivity
