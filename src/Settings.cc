@@ -32,7 +32,60 @@
 
 using namespace std;
 
+
+
+
+namespace {
+// Print once without risking iostream format weirdness
+inline void DBG(const char* s) { std::cerr << s << std::endl; }
+
+// Read a matrix node that might be provided either as an OpenCV matrix or as a YAML list.
+// If rows*cols != list length, or wrong shape, returns empty and sets ok=false.
+cv::Mat readMatFlexible(cv::FileStorage& fs, const std::string& key,
+                        int rows, int cols, bool& ok) {
+  ok = false;
+  cv::FileNode n = fs[key];
+  if (n.empty()) return cv::Mat();
+
+  // Case 1: OpenCV matrix node
+  if (n.isMap() && !n["rows"].empty() && !n["cols"].empty() && !n["dt"].empty() && !n["data"].empty()) {
+    cv::Mat M = n.mat();
+    if (M.rows == rows && M.cols == cols) { ok = true; return M; }
+    std::cerr << "[ToF] Node '" << key << "' has matrix but wrong shape "
+              << M.rows << "x" << M.cols << " (expected "
+              << rows << "x" << cols << ")\n";
+    return cv::Mat();
+  }
+
+  // Case 2: simple list of numbers
+  if (n.isSeq()) {
+    std::vector<double> v; v.reserve(rows*cols);
+    for (auto it = n.begin(); it != n.end(); ++it) v.push_back((double)*it);
+    if ((int)v.size() == rows*cols) {
+      cv::Mat M(rows, cols, CV_64F);
+      for (int r=0, k=0; r<rows; ++r)
+        for (int c=0; c<cols; ++c, ++k) M.at<double>(r,c) = v[k];
+      ok = true; return M;
+    } else {
+      std::cerr << "[ToF] Node '" << key << "' is a seq of len "
+                << v.size() << " (expected " << rows*cols << ")\n";
+      return cv::Mat();
+    }
+  }
+
+  // Fallback: numeric scalar? not acceptable for matrix
+  std::cerr << "[ToF] Node '" << key << "' exists but is not a matrix nor a numeric list.\n";
+  return cv::Mat();
+}
+} // anon
+
+
 namespace ORB_SLAM3 {
+
+
+
+
+    
 
     template<>
     float Settings::readParameter<float>(cv::FileStorage& fSettings, const std::string& name, bool& found, const bool required){
@@ -183,6 +236,8 @@ namespace ORB_SLAM3 {
 
 
         // --- ToF (1D laser) params ---
+        cerr << "[DBG] before readToF" << endl;
+
         readToF(fSettings);
         
         cout << "Reading ToF parameters"<< endl;
@@ -496,35 +551,39 @@ namespace ORB_SLAM3 {
 
     //ADDED READER FOR THE 1D LASER PARAMETERS
     void Settings::readToF(cv::FileStorage &fSettings) {
+        DBG("[ToF] enter readToF");
         bool found;
 
-        // Optional enable flag; default off
         int tofEnabled = readParameter<int>(fSettings, "ToF.Enabled", found, /*required=*/false);
         tof_params_.enabled = found ? (tofEnabled != 0) : false;
 
-        // Grid & FoV (for multi-pixel ToF; harmless for 1x1)
+        // Early log so we know if we’ll parse further
+        std::cerr << "[ToF] enabled=" << tof_params_.enabled << std::endl;
+
+        // These reads are all optional; none should crash:
         int Nx = readParameter<int>(fSettings, "ToF.Nx", found, false);
         if (found) tof_params_.Nx = Nx;
+
         int Ny = readParameter<int>(fSettings, "ToF.Ny", found, false);
         if (found) tof_params_.Ny = Ny;
 
         float fovx = readParameter<float>(fSettings, "ToF.FoV_X_deg", found, false);
-        if (found) tof_params_.fov_x_deg = static_cast<double>(fovx);
-        float fovy = readParameter<float>(fSettings, "ToF.FoV_Y_deg", found, false);
-        if (found) tof_params_.fov_y_deg = static_cast<double>(fovy);
+        if (found) tof_params_.fov_x_deg = (double)fovx;
 
-        // Plane-fit and robustness knobs
+        float fovy = readParameter<float>(fSettings, "ToF.FoV_Y_deg", found, false);
+        if (found) tof_params_.fov_y_deg = (double)fovy;
+
         int winr = readParameter<int>(fSettings, "ToF.win_radius_px", found, false);
         if (found) tof_params_.win_radius_px = winr;
 
         float dotmin = readParameter<float>(fSettings, "ToF.incidence_min_dot", found, false);
-        if (found) tof_params_.incidence_min_dot = static_cast<double>(dotmin);
+        if (found) tof_params_.incidence_min_dot = (double)dotmin;
 
         int minInl = readParameter<int>(fSettings, "ToF.min_plane_inliers", found, false);
         if (found) tof_params_.min_plane_inliers = minInl;
 
         float rth = readParameter<float>(fSettings, "ToF.ransac_thresh_m", found, false);
-        if (found) tof_params_.ransac_thresh_m = static_cast<double>(rth);
+        if (found) tof_params_.ransac_thresh_m = (double)rth;
 
         int minRays = readParameter<int>(fSettings, "ToF.min_good_rays", found, false);
         if (found) tof_params_.min_good_rays = minRays;
@@ -533,34 +592,39 @@ namespace ORB_SLAM3 {
         if (found) tof_params_.hist_len = histLen;
 
         float rho2 = readParameter<float>(fSettings, "ToF.rho2", found, false);
-        if (found) tof_params_.rho2 = static_cast<double>(rho2);
+        if (found) tof_params_.rho2 = (double)rho2;
 
         float sigma = readParameter<float>(fSettings, "ToF.sigma", found, false);
-        if (found) tof_params_.sigma = static_cast<double>(sigma);
+        if (found) tof_params_.sigma = (double)sigma;
 
-        // Extrinsics: R_cam_from_tof (3x3), t_cam_from_tof (3x1)
-        cv::Mat Rcv = readParameter<cv::Mat>(fSettings, "ToF.R_cam_from_tof", found, false);
-        if (found) {
-            if (Rcv.rows == 3 && Rcv.cols == 3) {
-                cv::Mat R64; Rcv.convertTo(R64, CV_64F);
-                cv::cv2eigen(R64, tof_params_.R_cam_from_tof);
-            } else {
-                std::cerr << "[ToF] R_cam_from_tof must be 3x3; ignoring provided matrix.\n";
-            }
+        // Extrinsics (robust to either OpenCV-matrix or plain YAML lists)
+        bool okR=false, okt=false;
+        cv::Mat Rcv = readMatFlexible(fSettings, "ToF.R_cam_from_tof", 3, 3, okR);
+        if (okR) {
+            cv::Mat R64; Rcv.convertTo(R64, CV_64F);
+            cv::cv2eigen(R64, tof_params_.R_cam_from_tof);
+        } else if (!fSettings["ToF.R_cam_from_tof"].empty()) {
+            std::cerr << "[ToF] ignoring R_cam_from_tof (bad shape)\n";
         }
 
-        cv::Mat tcv = readParameter<cv::Mat>(fSettings, "ToF.t_cam_from_tof", found, false);
-        if (found) {
-            if ((tcv.rows == 3 && tcv.cols == 1) || (tcv.rows == 1 && tcv.cols == 3)) {
-                cv::Mat t64; tcv.convertTo(t64, CV_64F);
-                Eigen::Matrix<double,3,1> t;
-                cv::cv2eigen(t64.reshape(1,3), t);
-                tof_params_.t_cam_from_tof = t;
-            } else {
-                std::cerr << "[ToF] t_cam_from_tof must be 3x1 or 1x3; ignoring provided vector.\n";
-            }
+        cv::Mat tcv = readMatFlexible(fSettings, "ToF.t_cam_from_tof", 3, 1, okt);
+        if (okt) {
+            cv::Mat t64; tcv.convertTo(t64, CV_64F);
+            if (t64.rows == 1) t64 = t64.t();
+            Eigen::Vector3d t;
+            cv::cv2eigen(t64, t);
+            tof_params_.t_cam_from_tof = t;
+        } else if (!fSettings["ToF.t_cam_from_tof"].empty()) {
+            std::cerr << "[ToF] ignoring t_cam_from_tof (bad shape)\n";
         }
+
+        std::cerr << "[ToF] done parse. Nx=" << tof_params_.Nx
+                << " Ny=" << tof_params_.Ny
+                << " FoVx=" << tof_params_.fov_x_deg
+                << " FoVy=" << tof_params_.fov_y_deg << std::endl;
+        DBG("[ToF] leave readToF");
     }
+
 
     
 
