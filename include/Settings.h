@@ -189,6 +189,9 @@ namespace ORB_SLAM3 {
         void readViewer(cv::FileStorage& fSettings);
         void readLoadAndSave(cv::FileStorage& fSettings);
         void readOtherParameters(cv::FileStorage& fSettings);
+        
+        //-----add the method to read the file-----//
+        void readToF(cv::FileStorage &fSettings);
 
         void precomputeRectificationMaps();
 
@@ -267,8 +270,7 @@ namespace ORB_SLAM3 {
 
         ToFParams tof_params_;
 
-        void readToF(cv::FileStorage &fSettings);
-
+        
     };
 };
 
