@@ -117,7 +117,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         }
     }
     
-    //reading 1d range finder m
+    // -------- ToF parameters read directly from fsSettings --------
     auto getInt    = [&](const char* key, int def)->int {
         cv::FileNode n = fsSettings[key];
         return (!n.empty() && n.isInt()) ? (int)n : def;
@@ -131,38 +131,37 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     };
     auto getMatOpt = [&](const char* key)->cv::Mat {
         cv::FileNode n = fsSettings[key];
-        return n.empty() ? cv::Mat() : (cv::Mat)n;
+        if (n.empty()) return cv::Mat();
+        cv::Mat m;
+        n >> m;                // <-- this is the correct way
+        return m;
     };
 
-    // Enabled flag (0/1)
-    const bool tofEnabled = getInt("ToF.Enabled", 1) != 0;
+    const bool tofEnabled = getInt("ToF.Enabled", 0) != 0;
 
     if (tofEnabled) {
         ScaleSupervisor::Params P;
 
-        // Scalars
-        P.Nx                = getInt   ("ToF.Nx",              1);
-        P.Ny                = getInt   ("ToF.Ny",              1);
-        P.fov_x_deg         = getFloat ("ToF.FoV_X_deg",       0.0);
-        P.fov_y_deg         = getFloat ("ToF.FoV_Y_deg",       0.0);
-        P.win_radius_px     = getInt   ("ToF.win_radius_px",  35);
-        P.incidence_min_dot = getFloat ("ToF.incidence_min_dot", 0.30);
-        P.min_plane_inliers = getInt   ("ToF.min_plane_inliers", 5);
-        P.ransac_thresh_m   = getFloat ("ToF.ransac_thresh_m", 0.03);
-        P.min_good_rays     = getInt   ("ToF.min_good_rays",   1);
-        P.hist_len          = getInt   ("ToF.hist_len",        5);
-        P.rho2              = getFloat ("ToF.rho2",            0.05);
-        P.sigma             = getFloat ("ToF.sigma",           0.01);
+        P.Nx                = getInt   ("ToF.Nx",                 1);
+        P.Ny                = getInt   ("ToF.Ny",                 1);
+        P.fov_x_deg         = getFloat ("ToF.FoV_X_deg",          0.0);
+        P.fov_y_deg         = getFloat ("ToF.FoV_Y_deg",          0.0);
+        P.win_radius_px     = getInt   ("ToF.win_radius_px",     22);
+        P.incidence_min_dot = getFloat ("ToF.incidence_min_dot",  0.30);
+        P.min_plane_inliers = getInt   ("ToF.min_plane_inliers", 12);
+        P.ransac_thresh_m   = getFloat ("ToF.ransac_thresh_m",    0.03);
+        P.min_good_rays     = getInt   ("ToF.min_good_rays",      1);
+        P.hist_len          = getInt   ("ToF.hist_len",           5);
+        P.rho2              = getFloat ("ToF.rho2",               0.05);
+        P.sigma             = getFloat ("ToF.sigma",              0.01);
 
-        // Extrinsics: R_cam_from_tof (3x3), t_cam_from_tof (3x1 or 1x3)
+        // Extrinsics
         {
             cv::Mat Rcv = getMatOpt("ToF.R_cam_from_tof");
             if (!Rcv.empty()) {
                 if (Rcv.rows == 3 && Rcv.cols == 3) {
                     cv::Mat R64; Rcv.convertTo(R64, CV_64F);
-                    Eigen::Matrix3d R;
-                    cv::cv2eigen(R64, R);
-                    P.R_cam_from_tof = R;
+                    cv::cv2eigen(R64, P.R_cam_from_tof);
                 } else {
                     std::cerr << "[ToF] R_cam_from_tof must be 3x3; ignoring.\n";
                 }
@@ -180,7 +179,6 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
             }
         }
 
-        // Construct supervisor
         mpScaleSup = new ScaleSupervisor(P);
         std::cout << "[ToF] Enabled. Nx=" << P.Nx
                 << " Ny=" << P.Ny
@@ -190,6 +188,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         mpScaleSup = nullptr;
         std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
     }
+// --------------------------------------------------------------
 
 
     node = fsSettings["loopClosing"];
