@@ -194,8 +194,7 @@ bool ScaleSupervisor::RobustPlaneRANSAC(const VVec3f& pts,
     ninl = static_cast<int>(inl.size());
     return true;
   }
-  true;
-  }
+  
 
 /**
  * Fit a local plane from MapPoints around pixel px in the current KF.
