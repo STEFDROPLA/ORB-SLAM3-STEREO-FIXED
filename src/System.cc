@@ -149,7 +149,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         P.win_radius_px     = getInt   ("ToF.win_radius_px",     40);
         P.incidence_min_dot = getFloat ("ToF.incidence_min_dot",  0.30);
         P.min_plane_inliers = getInt   ("ToF.min_plane_inliers", 5);
-        P.ransac_thresh_m   = getFloat ("ToF.ransac_thresh_m",    0.03);
+        P.ransac_thresh_m   = getFloat ("ToF.ransac_thresh_m",    0.2);
         P.min_good_rays     = getInt   ("ToF.min_good_rays",      1);
         P.hist_len          = getInt   ("ToF.hist_len",           5);
         P.rho2              = getFloat ("ToF.rho2",               0.05);

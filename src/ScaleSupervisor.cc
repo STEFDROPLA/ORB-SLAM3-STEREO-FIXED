@@ -209,7 +209,6 @@ bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
   VVec3f pts;
   if (!GatherNearby3D_FromMap(pKF, px, P_.win_radius_px, pts)) return false;
 
-  // scale RANSAC threshold with median Z for mild depth-adaptivity
   float medz;
   {
     std::vector<float> zs; zs.reserve(pts.size());
@@ -218,9 +217,19 @@ bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
     medz = zs[zs.size()/2];
   }
 
-  const float th = std::max(0.01f,
-                            static_cast<float>(P_.ransac_thresh_m) * (medz / 10.0f));
-  const int   min_inl = std::max(P_.min_plane_inliers, 8);
+  // --- OLD LINEAR CODE ---
+  // const float th = std::max(0.01f,
+  //                           static_cast<float>(P_.ransac_thresh_m) * (medz / 10.0f));
+
+  // --- NEW QUADRATIC CODE ---
+  // We use 10.0f as the "pivot" distance.
+  // If Z < 10m, the effect is reduced. If Z > 10m, it grows rapidly.
+  float ratio = medz / 10.0f;
+  
+  const float th = std::max(0.01f, 
+                            static_cast<float>(P_.ransac_thresh_m) * (ratio * ratio));
+
+  const int min_inl = std::max(P_.min_plane_inliers, 8);
 
   return RobustPlaneRANSAC(pts, th, min_inl, P0, n, inliers);
 }
