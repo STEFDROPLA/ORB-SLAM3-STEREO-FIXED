@@ -137,62 +137,65 @@ bool ScaleSupervisor::RobustPlaneRANSAC(const VVec3f& pts,
                                         Eigen::Vector3f& P0,
                                         Eigen::Vector3f& n,
                                         int& ninl) const
+  {
+    if (static_cast<int>(pts.size()) < std::max(min_inliers, 6)) return false;
 
-{
-  if (static_cast<int>(pts.size()) < std::max(min_inliers, 6)) return false;
+    std::mt19937 rng(12345);
+    std::uniform_int_distribution<int> uni(0, static_cast<int>(pts.size()) - 1);
 
-  std::mt19937 rng(12345);
-  std::uniform_int_distribution<int> uni(0, static_cast<int>(pts.size()) - 1);
+    int best = -1;
+    Eigen::Vector3f bN(0.f,0.f,1.f), bP(0.f,0.f,0.f);
 
-  int best = -1;
-  Eigen::Vector3f bN(0.f,0.f,1.f), bP(0.f,0.f,0.f);
+    // RANSAC
+    for (int it = 0; it < 200; ++it) {
+      const Eigen::Vector3f a = pts[uni(rng)];
+      const Eigen::Vector3f b = pts[uni(rng)];
+      const Eigen::Vector3f c = pts[uni(rng)];
 
-  // RANSAC
-  for (int it = 0; it < 200; ++it) {
-    const Eigen::Vector3f a = pts[uni(rng)];
-    const Eigen::Vector3f b = pts[uni(rng)];
-    const Eigen::Vector3f c = pts[uni(rng)];
+      Eigen::Vector3f nc = (b - a).cross(c - a);
+      const float nn = nc.norm();
+      if (nn < 1e-6f) continue;
+      nc /= nn;
 
-    Eigen::Vector3f nc = (b - a).cross(c - a);
-    const float nn = nc.norm();
-    if (nn < 1e-6f) continue;
-    nc /= nn;
-
-    int inl = 0;
-    for (size_t k = 0; k < pts.size(); ++k) {
-      const float d = std::abs(nc.dot(pts[k] - a));
-      if (d < thresh) ++inl;
+      int inl = 0;
+      for (size_t k = 0; k < pts.size(); ++k) {
+        const float d = std::abs(nc.dot(pts[k] - a));
+        if (d < thresh) ++inl;
+      }
+      if (inl > best) { best = inl; bN = nc; bP = a; }
     }
-    if (inl > best) { best = inl; bN = nc; bP = a; }
+
+    if (best < min_inliers) return false;
+
+    // LS refine on inliers
+    std::vector<Eigen::Vector3f> inl; inl.reserve(best);
+    for (size_t k = 0; k < pts.size(); ++k) {
+      const float d = std::abs(bN.dot(pts[k] - bP));
+      if (d < thresh) inl.push_back(pts[k]);
+    }
+
+    if (inl.size() < static_cast<size_t>(min_inliers)) return false;
+
+    Eigen::Vector3f mu = Eigen::Vector3f::Zero();
+    for (size_t k = 0; k < inl.size(); ++k) mu += inl[k];
+    mu /= static_cast<float>(inl.size());
+
+    Eigen::Matrix3f C = Eigen::Matrix3f::Zero();
+    for (size_t k = 0; k < inl.size(); ++k) {
+      const Eigen::Vector3f q = inl[k] - mu;
+      C += q * q.transpose();
+    }
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es(C);
+    n = es.eigenvectors().col(0);  // smallest eigenvalue -> plane normal
+    n.normalize();
+
+    P0   = mu;
+    ninl = static_cast<int>(inl.size());
+    return true;
   }
-
-  if (best < min_inliers) return false;
-
-  // LS refine on inliers
-  std::vector<Eigen::Vector3f> inl; inl.reserve(best);
-  for (size_t k = 0; k < pts.size(); ++k) {
-    const float d = std::abs(bN.dot(pts[k] - bP));
-    if (d < thresh) inl.push_back(pts[k]);
+  true;
   }
-
-  Eigen::Vector3f mu = Eigen::Vector3f::Zero();
-  for (size_t k = 0; k < inl.size(); ++k) mu += inl[k];
-  mu /= static_cast<float>(inl.size());
-
-  Eigen::Matrix3f C = Eigen::Matrix3f::Zero();
-  for (size_t k = 0; k < inl.size(); ++k) {
-    const Eigen::Vector3f q = inl[k] - mu;
-    C += q * q.transpose();
-  }
-
-  Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es(C);
-  n = es.eigenvectors().col(0);
-  n.normalize();
-
-  P0   = mu;
-  ninl = static_cast<int>(inl.size());
-  return true;
-}
 
 /**
  * Fit a local plane from MapPoints around pixel px in the current KF.
@@ -230,8 +233,19 @@ bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
                             static_cast<float>(P_.ransac_thresh_m) * (ratio * ratio));
 
   const int min_inl = std::max(P_.min_plane_inliers, 5);
+  if (!RobustPlaneRANSAC(pts, th, min_inl, P0, n, inliers))
+    return false;
 
-  return RobustPlaneRANSAC(pts, th, min_inl, P0, n, inliers);
+  // Orient the plane normal to face the camera ray and gate by incidence.
+  Eigen::Vector3f d_cam = RayDirCamFrame(0, 0);   // nadir ray in cam frame
+  if (n.dot(d_cam) > 0.f) n = -n;                  // flip to face the ray
+
+  const float dot_nd = n.dot(d_cam);
+  // Require strong opposition (nadir: expect ~ -1). Example: 0.7 threshold.
+  if (dot_nd > -static_cast<float>(P_.incidence_min_dot))
+    return false;
+
+  return true;
 }
 
 /**
