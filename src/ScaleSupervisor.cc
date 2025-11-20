@@ -229,7 +229,7 @@ bool ScaleSupervisor::FitLocalPlaneFromMap(KeyFrame* pKF,
   const float th = std::max(0.01f, 
                             static_cast<float>(P_.ransac_thresh_m) * (ratio * ratio));
 
-  const int min_inl = std::max(P_.min_plane_inliers, 8);
+  const int min_inl = std::max(P_.min_plane_inliers, 5);
 
   return RobustPlaneRANSAC(pts, th, min_inl, P0, n, inliers);
 }
