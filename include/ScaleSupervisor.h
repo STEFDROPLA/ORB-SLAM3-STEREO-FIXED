@@ -51,6 +51,8 @@ public:
   // Phase 3: estimate local scale lambda for this KF (no map changes yet)
   // Returns true if a valid lambda was computed; writes it to lambda_out if provided.
   bool ComputeAndMaybeApply(KeyFrame* kf);
+  bool MaybeApplyLocalScale(KeyFrame* kf);   // stub for now (no-op)
+
 
 
 

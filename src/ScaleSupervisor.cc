@@ -330,11 +330,7 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
   return true;
 }
 
-bool ComputeAndMaybeApply(KeyFrame* kf) {
-  double lambda = 1.0;
-  if (!ComputeLambdaForKeyFrame(kf, &lambda)) return false;
-  return MaybeApplyLocalScale(kf);
-}
+
 
 bool ScaleSupervisor::GetScanNear(double t_kf, ToFScan& out) const
 {
@@ -353,6 +349,16 @@ bool ScaleSupervisor::GetScanNear(double t_kf, ToFScan& out) const
   return true;
 }
 
+bool ScaleSupervisor::ComputeAndMaybeApply(KeyFrame* kf) {
+  double lambda = 1.0;
+  if (!ComputeLambdaForKeyFrame(kf, &lambda)) return false;
+  return MaybeApplyLocalScale(kf);
+}
+
+bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* /*kf*/) {
+  // Phase 3 (apply step) not wired yet – return false for now
+  return false;
+}
 
 
 } // namespace ORB_SLAM3
