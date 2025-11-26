@@ -27,9 +27,13 @@ ScaleSupervisor::ScaleSupervisor(const Params& P)
 void ScaleSupervisor::UpdateToFScan(const ToFScan& s)
 {
   std::lock_guard<std::mutex> lk(mtx_scan_);
-  last_scan_ = s;
   has_scan_  = true;
+  last_scan_ = s;
+
+  scan_buf_.push_back(s);
+  while (scan_buf_.size() > max_scans_) scan_buf_.pop_front();
 }
+
 
 // ---------- geometry helpers ----------
 
@@ -231,27 +235,6 @@ bool ScaleSupervisor::IntersectRayPlane(const Eigen::Vector3f& O,
   return true;
 }
 
-// -------- Phase 3 helpers --------
-
-bool ScaleSupervisor::LatestRangeForKF(double kf_stamp, float& r) const
-{
-  std::lock_guard<std::mutex> lk(mtx_scan_);
-  if (!has_scan_) return false;
-  if (std::abs(last_scan_.stamp_sec - kf_stamp) > P_.max_tof_age_sec) return false;
-
-  std::vector<float> vals;
-  vals.reserve(last_scan_.ranges.size());
-  for (size_t i = 0; i < last_scan_.ranges.size(); ++i) {
-    const bool ok = (last_scan_.valid.empty() ? true : (last_scan_.valid[i] != 0));
-    const float v = last_scan_.ranges[i];
-    if (ok && std::isfinite(v) && v > 0.f) vals.push_back(v);
-  }
-  if (vals.empty()) return false;
-
-  std::nth_element(vals.begin(), vals.begin() + vals.size()/2, vals.end());
-  r = vals[vals.size()/2];  // median
-  return true;
-}
 
 bool ScaleSupervisor::DistanceAlongRayToPlane(const Eigen::Vector3f& d_cam,
                                               const Eigen::Vector3f& P0,
@@ -294,14 +277,31 @@ bool ScaleSupervisor::GetRayAndPlane(KeyFrame* pKF,
 
 bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
 {
+  
   if (lambda_out) *lambda_out = 1.0;
   if (!kf) return false;
 
-  // 0) fresh ToF reading near this KF time
-  float r_meas = 0.f;
-  if (!LatestRangeForKF(kf->mTimeStamp, r_meas)) {
+  // 0) pull the closest-in-time ToF scan
+  ToFScan s;
+  if (!GetScanNear(kf->mTimeStamp, s)) {
+    std::cout << "[ToF-DBG] KF " << kf->mnId << " no ToF within " << max_dt_sync_ << " s\n";
     return false;
   }
+
+  // robust single value from the scan (median over valid entries)
+  float r_meas = 0.f;
+  {
+    std::vector<float> vals; vals.reserve(s.ranges.size());
+    for (size_t i = 0; i < s.ranges.size(); ++i) {
+      const bool ok = (s.valid.empty() ? true : (s.valid[i] != 0));
+      const float v = s.ranges[i];
+      if (ok && std::isfinite(v) && v > 0.f) vals.push_back(v);
+    }
+    if (vals.empty()) return false;
+    std::nth_element(vals.begin(), vals.begin()+vals.size()/2, vals.end());
+    r_meas = vals[vals.size()/2];
+  }
+
 
   // 1) get ToF ray + local plane in this KF
   Eigen::Vector3f d_cam, P0, n; int ninl = 0;
@@ -330,10 +330,29 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
   return true;
 }
 
-bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* /*kf*/)
-{
-  // Estimation-only in Phase 3 (no map edits yet).
-  return false;
+bool ComputeAndMaybeApply(KeyFrame* kf) {
+  double lambda = 1.0;
+  if (!ComputeLambdaForKeyFrame(kf, &lambda)) return false;
+  return MaybeApplyLocalScale(kf);
 }
+
+bool ScaleSupervisor::GetScanNear(double t_kf, ToFScan& out) const
+{
+  std::lock_guard<std::mutex> lk(mtx_scan_);
+  if (scan_buf_.empty()) return false;
+
+  double best_dt = 1e9;
+  int best_i = -1;
+  for (int i = 0; i < (int)scan_buf_.size(); ++i) {
+    double dt = std::abs(scan_buf_[i].stamp_sec - t_kf);
+    if (dt < best_dt) { best_dt = dt; best_i = i; }
+  }
+  if (best_i < 0 || best_dt > max_dt_sync_) return false;
+
+  out = scan_buf_[best_i];
+  return true;
+}
+
+
 
 } // namespace ORB_SLAM3

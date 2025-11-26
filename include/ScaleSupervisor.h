@@ -50,10 +50,9 @@ public:
 
   // Phase 3: estimate local scale lambda for this KF (no map changes yet)
   // Returns true if a valid lambda was computed; writes it to lambda_out if provided.
-  bool ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out = nullptr);
+  bool ComputeAndMaybeApply(KeyFrame* kf);
 
-  // Placeholder for future in-graph application (Phase 4+). Currently returns false.
-  bool MaybeApplyLocalScale(KeyFrame* kf);
+
 
 private:
   // ---- helpers (float math to match SLAM internals) ----
@@ -105,6 +104,15 @@ private:
                       Eigen::Vector3f& P0,
                       Eigen::Vector3f& n,
                       int& ninl) const;
+
+
+  // --- buffering & sync (private) ---
+  std::deque<ToFScan> scan_buf_;
+  size_t max_scans_ = 100;        // keep last 100 scans
+  double max_dt_sync_ = 0.05;     // accept ToF within ±50 ms of KF time
+
+  bool GetScanNear(double t_kf, ToFScan& out) const;
+
 
 private:
   Params P_;
