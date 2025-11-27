@@ -1,3 +1,5 @@
+#pragma once
+
 // at the top of the header (add if missing)
 #include <mutex>
 #include <deque>
@@ -42,8 +44,12 @@ public:
 
   // Phase 3 public API
   bool ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out = nullptr);
-  bool MaybeApplyLocalScale(KeyFrame* kf);         // safe no-op for now
+  bool MaybeApplyLocalScale(KeyFrame* kf, double lambda);
   bool ComputeAndMaybeApply(KeyFrame* kf);         // wrapper: compute + maybe apply
+
+  std::deque<double> lambda_hist_;
+  double gate_rel = 0.35;   // reject if |λ - median| > 35% of median
+  double gate_abs = 0.25;   // or if absolute jump is > 0.25
 
 private:
   // ---- helpers (declarations) ----
@@ -86,8 +92,8 @@ private:
 
   // small buffer for nearest-time lookup
   std::deque<ToFScan> scan_buf_;
-  size_t max_scans_ = 50;
-  double max_dt_sync_ = 0.15;  // seconds
+  size_t max_scans_ = 100;
+  double max_dt_sync_ = 0.2;  // seconds
 };
 
 } // namespace ORB_SLAM3

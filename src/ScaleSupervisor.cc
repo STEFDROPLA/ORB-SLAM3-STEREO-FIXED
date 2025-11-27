@@ -319,13 +319,40 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
   // 3) λ = r_meas / r_hat (clamped)
   double lambda = static_cast<double>(r_meas / r_hat);
   lambda = std::max(P_.lambda_clip_min, std::min(P_.lambda_clip_max, lambda));
-  if (lambda_out) *lambda_out = lambda;
+  //if (lambda_out) *lambda_out = lambda;
+
+  // Keep history
+  lambda_hist_.push_back(lambda);
+  if (lambda_hist_.size() > static_cast<size_t>(P_.hist_len))
+      lambda_hist_.pop_front();
+
+  // Median of history
+  std::vector<double> tmp(lambda_hist_.begin(), lambda_hist_.end());
+  std::nth_element(tmp.begin(), tmp.begin() + tmp.size()/2, tmp.end());
+  double med = tmp[tmp.size()/2];
+
+  // Gating: reject strong outliers
+  double rel_err = std::abs(lambda - med) / std::max(1e-6, med);
+  double abs_err = std::abs(lambda - med);
+  if (rel_err > gate_rel && abs_err > gate_abs) {
+      std::cout << "[ToF-λ] KF " << kf->mnId
+                << " rejected: λ=" << lambda
+                << " med=" << med
+                << " rel_err=" << rel_err << "\n";
+      return false;
+  }
+
+  // Use a smoothed value (median or blend)
+  double lambda_smooth = 0.5 * lambda + 0.5 * med; // or just med
+  if (lambda_out) *lambda_out = lambda_smooth;
 
   std::cout << "[ToF-λ] KF " << kf->mnId
             << " ninl=" << ninl
             << " r_meas=" << r_meas
             << " r_hat="  << r_hat
-            << " lambda=" << lambda << "\n";
+            << " λ_raw="  << lambda
+            << " λ_med="  << med
+            << " λ_use="  << lambda_smooth << "\n";
 
   return true;
 }
@@ -349,16 +376,24 @@ bool ScaleSupervisor::GetScanNear(double t_kf, ToFScan& out) const
   return true;
 }
 
+// src/ScaleSupervisor.cc
 bool ScaleSupervisor::ComputeAndMaybeApply(KeyFrame* kf) {
   double lambda = 1.0;
   if (!ComputeLambdaForKeyFrame(kf, &lambda)) return false;
-  return MaybeApplyLocalScale(kf);
+  return MaybeApplyLocalScale(kf, lambda);
 }
 
-bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* /*kf*/) {
-  // Phase 3 (apply step) not wired yet – return false for now
-  return false;
-}
+bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* kf, double lambda) {
+  if (!kf || !std::isfinite(lambda)) return false;
+  if (std::abs(lambda - 1.0) < 1e-3) return true;  // tiny adjustment, skip
 
+  Map* map = kf->GetMap();
+  if (!map) return false;
+
+  const Sophus::SE3f T = Sophus::SE3f();           // identity: no rotation/translation
+  const bool scale_vel = true;                     // also scale velocities
+  map->ApplyScaledRotation(T, static_cast<float>(lambda), scale_vel);
+  return true;
+}
 
 } // namespace ORB_SLAM3
