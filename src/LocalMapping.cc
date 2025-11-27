@@ -129,8 +129,9 @@ void LocalMapping::Run()
                 {
 
                     // --- ToF scale (pre-BA): apply local scale if drift detected ---
+                    // --- ToF scale (pre-BA): apply local scale if drift detected ---
                     if (mpSystem->mpScaleSup) {
-                        (void) mpSystem->mpScaleSup->MaybeApplyLocalScale(mpCurrentKeyFrame);
+                        (void) mpSystem->mpScaleSup->ComputeAndMaybeApply(mpCurrentKeyFrame);
                     }
                     // ----------------------------------------------------------------
 
