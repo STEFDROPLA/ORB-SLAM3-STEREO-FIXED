@@ -137,7 +137,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
         return m;
     };
 
-    const bool tofEnabled = getInt("ToF.Enabled", 1) != 0;
+    const bool tofEnabled = getInt("ToF.Enabled", 0) != 0;
 
     if (tofEnabled) {
         ScaleSupervisor::Params P;
@@ -184,6 +184,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
                 << " Ny=" << P.Ny
                 << " FoVx=" << P.fov_x_deg
                 << " FoVy=" << P.fov_y_deg << std::endl;
+                
+        
+        mpScaleSup = nullptr;  // comment/remove this line to re-enable
+
+        
     } else {
         mpScaleSup = nullptr;
         std::cout << "[ToF] Disabled (ToF.Enabled=0 or missing)" << std::endl;
