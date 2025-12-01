@@ -35,6 +35,8 @@ public:
     double max_tof_age_sec = 0.15;  // accept a ToF reading within 150 ms of KF
     double lambda_clip_min = 0.5;   // clamp λ
     double lambda_clip_max = 2.0;
+    double min_apply_step = 0.01;   // skip applying if change is smaller
+    double ema_alpha = 0.2;         // weight for new samples in EMA
   };
 
   explicit ScaleSupervisor(const Params& P);
@@ -50,6 +52,9 @@ public:
   std::deque<double> lambda_hist_;
   double gate_rel = 0.35;   // reject if |λ - median| > 35% of median
   double gate_abs = 0.25;   // or if absolute jump is > 0.25
+  double last_applied_lambda_ = 1.0; // track last applied scale to ignore tiny changes
+  double lambda_ema_ = 1.0;          // EMA state
+  bool   lambda_ema_valid_ = false;  // initialized on first accepted value
 
 private:
   // ---- helpers (declarations) ----

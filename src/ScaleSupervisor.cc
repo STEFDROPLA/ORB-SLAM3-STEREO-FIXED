@@ -304,7 +304,8 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
 
 
   // 1) get ToF ray + local plane in this KF
-  Eigen::Vector3f d_cam, P0, n; int ninl = 0;
+  Eigen::Vector3f d_cam, P0, n; 
+  int ninl = 0;
   if (!GetRayAndPlane(kf, d_cam, P0, n, ninl)) {
     return false;
   }
@@ -342,9 +343,16 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
       return false;
   }
 
-  // Use a smoothed value (median or blend)
-  double lambda_smooth = 0.5 * lambda + 0.5 * med; // or just med
-  if (lambda_out) *lambda_out = lambda_smooth;
+  // EMA of accepted values for extra stability
+  if (!lambda_ema_valid_) {
+    lambda_ema_ = lambda;
+    lambda_ema_valid_ = true;
+  } else {
+    const double a = P_.ema_alpha;
+    lambda_ema_ = a * lambda + (1.0 - a) * lambda_ema_;
+  }
+
+  if (lambda_out) *lambda_out = lambda_ema_;
 
   std::cout << "[ToF-λ] KF " << kf->mnId
             << " ninl=" << ninl
@@ -352,7 +360,7 @@ bool ScaleSupervisor::ComputeLambdaForKeyFrame(KeyFrame* kf, double* lambda_out)
             << " r_hat="  << r_hat
             << " λ_raw="  << lambda
             << " λ_med="  << med
-            << " λ_use="  << lambda_smooth << "\n";
+            << " λ_ema="  << lambda_ema_ << "\n";
 
   return true;
 }
@@ -385,7 +393,8 @@ bool ScaleSupervisor::ComputeAndMaybeApply(KeyFrame* kf) {
 
 bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* kf, double lambda) {
   if (!kf || !std::isfinite(lambda)) return false;
-  if (std::abs(lambda - 1.0) < 1e-3) return true;  // tiny adjustment, skip
+  //if (std::abs(lambda - 1.0) < 1e-3) return true;  // gating. tiny adjustment, skip
+  if (std::abs(lambda - last_applied_lambda_) < P_.min_apply_step) return true; // change too small
 
   Map* map = kf->GetMap();
   if (!map) return false;
@@ -393,6 +402,7 @@ bool ScaleSupervisor::MaybeApplyLocalScale(KeyFrame* kf, double lambda) {
   const Sophus::SE3f T = Sophus::SE3f();           // identity: no rotation/translation
   const bool scale_vel = true;                     // also scale velocities
   map->ApplyScaledRotation(T, static_cast<float>(lambda), scale_vel);
+  last_applied_lambda_ = lambda;
   return true;
 }
 
